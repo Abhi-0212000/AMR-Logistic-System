@@ -18,21 +18,6 @@ find_package(amr_interfaces REQUIRED)
 # Specify where to find the header files
 include_directories(include)
 
-# We are supposed to add the executable here
-add_executable(amr_routing_graph 
-  src/global_path_plan_server/amr_routing_graph.cpp
-  src/global_path_plan_server/amr_traffic_rules.cpp
-)
-ament_target_dependencies(amr_routing_graph 
-  rclcpp 
-  lanelet2_core 
-  lanelet2_projection
-  lanelet2_io
-  lanelet2_routing
-  lanelet2_traffic_rules
-)
-
-
 add_executable(global_path_planner
     src/global_path_plan_server/global_path_planner.cpp
     src/global_path_plan_server/graph_builder.cpp  # Add this line
@@ -64,7 +49,6 @@ ament_target_dependencies(global_path_planner_client
 
 install(TARGETS
 
-  amr_routing_graph
   global_path_planner
   global_path_planner_client
 
