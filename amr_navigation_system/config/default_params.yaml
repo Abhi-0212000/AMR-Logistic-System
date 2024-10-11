@@ -1,0 +1,32 @@
+# Default Parameters used in global_path_planner.cpp (server node that calculates optimal path)
+# Node name is = amr_global_path_planner, executable name set in CMakeLists.txt is "global_path_planner"
+
+amr_global_path_planner:
+  ros__parameters:
+    paths:
+      map_path: "/home/abhi/ros2_lanelet2_ws/src/AMR-Logistic-System/amr_navigation_system/laneletMaps/HS-SchmalkaldenPart1.osm"
+      log_path: "/home/user/amr_data/logs"
+      debug_path: "/home/user/amr_data/debug_data"
+      
+    origins:
+      # gps_origin is used to load the .OSM map. It doesnt have to be at exact center of the .OSM map
+      gps_origin:
+        latitude: 50.7153508
+        longitude: 10.4680332
+        altitude: 0.0
+
+    bounding_box:
+      # bBox GPS coords are used to validate the incoming GPS data (Start, End GPS should be within this bBox range) from client.
+      # bBox range = constructed lanelet map range = AMR supported GPS range for Autonomous Nav. 
+      min_lat: 50.7146143
+      min_lon: 10.4612203
+      max_lat: 50.7188432
+      max_lon: 10.4691101
+
+    # Threshold to determine Nearest AMR Navigable Lanelet or Area for path planning.
+    max_distance_threshold: 20.0
+
+    debug_options:
+      # if "true", generated graph will be exported (graphml, graphviz, osm formats) and saved to "debug_path".
+      export_built_graph: false
+

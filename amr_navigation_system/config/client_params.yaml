@@ -1,0 +1,14 @@
+# Default Parameters used in global_path_planner_client.cpp (client node that requests optimal path)
+# Node name is = amr_global_path_planner_client, executable name set in CMakeLists.txt is "global_path_planner_client"
+
+amr_global_path_planner_client:
+  ros__parameters:
+    # GPS data is in DD (Decimal Degree) Format
+    start_latitude: 50.7154014
+    start_longitude: 10.4683083
+    start_altitude: 0.0
+    end_latitude: 50.7154152
+    end_longitude: 10.4678595
+    end_altitude: 0.0
+    # time based path calculation is not yet implemented. Currently assuming Const Speed on all kinds of road
+    use_time_based_routing: false
