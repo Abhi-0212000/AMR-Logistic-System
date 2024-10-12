@@ -4,8 +4,10 @@
 
 namespace amr_navigation {
 
+// Constructor
 OptimalPathFinder::OptimalPathFinder() {}
 
+// Destructor
 OptimalPathFinder::~OptimalPathFinder() {}
 
 lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
@@ -19,21 +21,21 @@ lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
     lanelet::Optional<lanelet::routing::LaneletOrAreaPath> bestPath;
     double shortestDistance = std::numeric_limits<double>::max();
 
-    // Helper lambda to reduce redundancy
+    // Lambda function to try different path combinations (inverted start/end)
     auto tryPath = [&](const lanelet::ConstLaneletOrArea& start, const lanelet::ConstLaneletOrArea& end) {
         auto path = graph.shortestPathIncludingAreas(start, end, 0, false);
         if (path) {
-            // Collect the IDs of all the elements in the path (both lanelets and areas)
+            // Log path IDs for debugging purposes
             std::stringstream path_ids;
             for (const auto& element : path.get()) {
-                path_ids << element.id() << " -> "; // Append each ID to the stream
+                path_ids << element.id() << " -> ";
             }
-            path_ids << "END"; // Mark the end of the path
+            path_ids << "END";
             
-            // Log the path and distance
             RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
                         "Trying path with IDs: %s", path_ids.str().c_str());
 
+            // Calculate and log the path distance
             double distance = calculatePathDistance(path.get());
             RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
                         "Path distance: %.2f meters.", distance);
@@ -50,12 +52,10 @@ lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
         }
     };
 
-
-    // Log start and end points
     RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
                 "Finding optimal path from start ID %ld to end ID %ld.", start_id, end_id);
 
-    // Optimize path checking by avoiding redundant checks
+    // Try different combinations of lanelet and area inversion for start and end
     if (start_is_lanelet) {
         lanelet::ConstLanelet start = map->laneletLayer.get(start_id);
         if (end_is_lanelet) {
@@ -87,9 +87,10 @@ lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
     }
 
     RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Optimal path successfully found with total distance: %.2f meters.", shortestDistance);
+                "Optimal path found with shortest distance: %.2f meters.", shortestDistance);
     return bestPath.get();
 }
+
 
 PathResponse OptimalPathFinder::buildPathResponse(
     const lanelet::routing::LaneletOrAreaPath& path,
