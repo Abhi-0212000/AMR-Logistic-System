@@ -35,10 +35,16 @@ public:
      * 
      * @param map A pointer to the loaded Lanelet2 map.
      * @param amrTrafficRules Custom traffic rules for the AMR.
+     * @param debugPath Path to the folder where debug files will be saved.
      * @param enableDebug If true, enables debug mode to output additional information.
      * @return A unique pointer to the built routing graph.
      */
-    lanelet::routing::RoutingGraphUPtr buildGraph(const lanelet::LaneletMapPtr& map, const lanelet::traffic_rules::TrafficRules& amrTrafficRules, bool enableDebug = false);
+    lanelet::routing::RoutingGraphUPtr buildGraph(
+        const lanelet::LaneletMapPtr& map, 
+        const lanelet::traffic_rules::TrafficRules& amrTrafficRules, 
+        const std::string& debugPath,
+        bool enableDebug = false
+    );
 
 private:
     /**

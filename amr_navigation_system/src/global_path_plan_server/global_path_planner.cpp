@@ -12,9 +12,9 @@ public:
     GlobalPathPlanner() : Node("amr_global_path_planner") 
     {
         // Declare parameters with default values, loaded from the YAML file
-        this->declare_parameter<std::string>("paths.map_path", "/home/user/amr_data/maps");
-        this->declare_parameter<std::string>("paths.log_path", "/home/user/amr_data/logs");
-        this->declare_parameter<std::string>("paths.debug_path", "/home/user/amr_data/debug_data");
+        this->declare_parameter<std::string>("paths.map_path", "");
+        this->declare_parameter<std::string>("paths.debug_path", amr_navigation::getDefaultDebugPath());
+        this->declare_parameter<bool>("debug_options.export_built_graph", false);
         this->declare_parameter<double>("origins.gps_origin.latitude", 0.0);
         this->declare_parameter<double>("origins.gps_origin.longitude", 0.0);
         this->declare_parameter<double>("origins.gps_origin.altitude", 0.0);
@@ -26,6 +26,9 @@ public:
 
         // Load the declared parameters
         loadParameters();
+
+        // Check map file and create debug directory if needed
+        checkMapAndCreateDebugDir();
 
         // Create the service that provides global path planning
         server_ = this->create_service<amr_interfaces::srv::ComputeGlobalPath>(
@@ -40,8 +43,9 @@ private:
     void loadParameters()
     {
         this->get_parameter("paths.map_path", map_path_);
-        this->get_parameter("paths.log_path", log_path_);
-        this->get_parameter("paths.debug_path", debug_path_);
+        // Get the debug_path parameter, use getDefaultDebugPath() if not specified
+        this->get_parameter_or("paths.debug_path", debug_path_, amr_navigation::getDefaultDebugPath());
+        this->get_parameter("debug_options.export_built_graph", export_built_graph_);
         this->get_parameter("origins.gps_origin.latitude", origin_latitude_);
         this->get_parameter("origins.gps_origin.longitude", origin_longitude_);
         this->get_parameter("origins.gps_origin.altitude", origin_altitude_);
@@ -57,6 +61,34 @@ private:
         RCLCPP_INFO(this->get_logger(), "Bounding Box: (%.6f, %.6f) to (%.6f, %.6f)", 
                     bbox_.min_lat, bbox_.min_lon, bbox_.max_lat, bbox_.max_lon);
         RCLCPP_INFO(this->get_logger(), "Max Distance Threshold: %.2f", max_distance_threshold_);
+        RCLCPP_INFO(this->get_logger(), "Debug Path: %s", debug_path_.c_str());
+        RCLCPP_INFO(this->get_logger(), "Export Built Graph: %s", export_built_graph_ ? "true" : "false");
+    }
+
+    void checkMapAndCreateDebugDir()
+    {
+        // Check if map file exists
+        if (!amr_navigation::checkFileExists(map_path_)) {
+            RCLCPP_ERROR(this->get_logger(), "Map file does not exist: %s", map_path_.c_str());
+            throw std::runtime_error("Map file not found");
+        }
+
+        // Create debug directory only if export_built_graph is true
+        if (export_built_graph_) {
+            try {
+                if (debug_path_.empty()) {
+                    debug_path_ = amr_navigation::getDefaultDebugPath();
+                    RCLCPP_INFO(this->get_logger(), "Using default debug path: %s", debug_path_.c_str());
+                } else {
+                    RCLCPP_INFO(this->get_logger(), "Using specified debug path: %s", debug_path_.c_str());
+                }
+                amr_navigation::createDirectory(debug_path_);
+                RCLCPP_INFO(this->get_logger(), "Debug directory created: %s", debug_path_.c_str());
+            } catch (const std::exception& e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create debug directory: %s. Error: %s", debug_path_.c_str(), e.what());
+                throw;
+            }
+        }
     }
 
     // Callback function for the service request
@@ -111,7 +143,7 @@ private:
             auto amrTrafficRules = std::make_shared<lanelet::traffic_rules::AmrTrafficRules>();
 
             // Build the routing graph from the map
-            auto routingGraph = graph_builder.buildGraph(map, *amrTrafficRules);
+            auto routingGraph = graph_builder.buildGraph(map, *amrTrafficRules, debug_path_, export_built_graph_);
 
             // Use OptimalPathFinder to find the nearest lanelet or area for start and end
             amr_navigation::OptimalPathFinder optimal_path_finder;
@@ -149,8 +181,8 @@ private:
 
     // Member variables to store parameter values
     std::string map_path_;
-    std::string log_path_;
     std::string debug_path_;
+    bool export_built_graph_;
     double origin_latitude_;
     double origin_longitude_;
     double origin_altitude_;

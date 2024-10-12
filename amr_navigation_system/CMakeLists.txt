@@ -23,6 +23,7 @@ add_executable(global_path_planner
     src/global_path_plan_server/graph_builder.cpp  # Add this line
     src/global_path_plan_server/amr_traffic_rules.cpp
     src/global_path_plan_server/optimal_path_finder.cpp
+    src/utils/common_utils.cpp
     # Add other source files here as needed
 )
 

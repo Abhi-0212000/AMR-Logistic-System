@@ -5,8 +5,9 @@ amr_global_path_planner:
   ros__parameters:
     paths:
       map_path: "/home/abhi/ros2_lanelet2_ws/src/AMR-Logistic-System/amr_navigation_system/laneletMaps/HS-SchmalkaldenPart1.osm"
-      log_path: "/home/user/amr_data/logs"
-      debug_path: "/home/user/amr_data/debug_data"
+      # debug_path will use the default if not specified
+      # Uncomment and modify this line if you want to override the default
+      # debug_path: "/custom/path/to/debug/directory"
       
     origins:
       # gps_origin is used to load the .OSM map. It doesnt have to be at exact center of the .OSM map

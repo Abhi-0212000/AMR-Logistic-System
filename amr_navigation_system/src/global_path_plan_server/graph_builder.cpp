@@ -26,7 +26,12 @@ lanelet::LaneletMapPtr GraphBuilder::loadOSMMap(const std::string& mapPath, cons
 }
 
 
-lanelet::routing::RoutingGraphUPtr GraphBuilder::buildGraph(const lanelet::LaneletMapPtr& map, const lanelet::traffic_rules::TrafficRules& amrTrafficRules, bool enableDebug) {
+lanelet::routing::RoutingGraphUPtr GraphBuilder::buildGraph(
+    const lanelet::LaneletMapPtr& map, 
+    const lanelet::traffic_rules::TrafficRules& amrTrafficRules,
+    const std::string& debugPath,
+    bool enableDebug
+) {
     // Check if the map is valid before proceeding
     if (!map) {
         RCLCPP_ERROR(rclcpp::get_logger("GraphBuilder"), "Cannot build graph: Map is null.");
@@ -40,7 +45,7 @@ lanelet::routing::RoutingGraphUPtr GraphBuilder::buildGraph(const lanelet::Lanel
 
         // If debug mode is enabled, generate debugging information
         if (enableDebug) {
-            if (enableGraphDebug(routingGraph, "path_to_debug_folder")) {  // Replace with actual debug folder path
+            if (enableGraphDebug(routingGraph, debugPath)) {
                 RCLCPP_INFO(rclcpp::get_logger("GraphBuilder"), "Debugging information generated successfully.");
             } else {
                 RCLCPP_WARN(rclcpp::get_logger("GraphBuilder"), "Failed to generate debugging information.");
