@@ -36,7 +36,7 @@ std::string getDefaultDebugPath() {
         }
     }
     
-    return basePath + "/amr_navigation_system/debug";
+    return basePath + "AMR/graph_debug";
 }
 
 }  // namespace amr_navigation

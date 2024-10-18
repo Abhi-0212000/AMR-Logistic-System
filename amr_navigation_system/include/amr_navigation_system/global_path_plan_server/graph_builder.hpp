@@ -8,6 +8,7 @@
 #include <string>
 #include <filesystem>  // For extracting the map name
 #include "amr_navigation_system/utils/common_utils.hpp"  // Include the GPSPoint struct for map origin
+#include "amr_navigation_system/utils/logger.hpp"
 
 namespace amr_navigation {
 
@@ -18,7 +19,7 @@ namespace amr_navigation {
 class GraphBuilder {
 public:
     // Constructor and Destructor
-    GraphBuilder() = default;
+    GraphBuilder(std::shared_ptr<amr_logging::NodeLogger> logger);
     ~GraphBuilder() = default;
 
     /**
@@ -60,6 +61,8 @@ private:
     double originLatitude_ = 0.0;
     double originLongitude_ = 0.0;
     std::string mapPath_;  // Path to the loaded map
+    std::shared_ptr<amr_logging::NodeLogger> logger_;
+
 };
 
 }  // namespace amr_navigation

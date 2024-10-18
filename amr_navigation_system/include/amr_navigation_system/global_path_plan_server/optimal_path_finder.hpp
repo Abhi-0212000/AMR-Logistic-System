@@ -14,6 +14,7 @@
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>  // For ROS2 node functionalities and logging
+#include "amr_navigation_system/utils/logger.hpp"
 
 namespace amr_navigation {
 
@@ -21,7 +22,7 @@ namespace amr_navigation {
 class OptimalPathFinder {
 public:
     // Constructor and Destructor
-    OptimalPathFinder();
+    OptimalPathFinder(std::shared_ptr<amr_logging::NodeLogger> logger);
     ~OptimalPathFinder();
 
     /**
@@ -88,6 +89,8 @@ private:
     double getTravelTime(
         const lanelet::ConstLaneletOrArea& la,
         const lanelet::traffic_rules::TrafficRules& amrTrafficRules) const;
+    
+    std::shared_ptr<amr_logging::NodeLogger> logger_;
 };
 
 }  // namespace amr_navigation

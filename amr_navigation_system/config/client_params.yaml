@@ -12,3 +12,8 @@ amr_global_path_planner_client:
     end_altitude: 0.0
     # time based path calculation is not yet implemented. Currently assuming Const Speed on all kinds of road
     use_time_based_routing: false
+
+    log_data:
+      log_path: "~/.local/share/AMR/logs"
+      log_file_type: "json" # json or log . ONly those 2 types of logs are supported
+      log_level: 0 # 0: Debug, 1: Info, 2: Warning, 3: Error, 4: Fatal

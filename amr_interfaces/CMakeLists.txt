@@ -18,6 +18,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "srv/ComputeGlobalPath.srv" # This .srv is not depending on geometry_msgs pkg.
+  "msg/LogMessage.msg"
   DEPENDENCIES geometry_msgs  # Ensure that the generated service can depend on geometry_msgs
 )
 
