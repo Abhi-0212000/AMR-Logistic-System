@@ -4,7 +4,7 @@
 amr_global_path_planner:
   ros__parameters:
     paths:
-      map_path: "/home/abhi/ros2_lanelet2_ws/src/AMR-Logistic-System/amr_navigation_system/laneletMaps/HS-SchmalkaldenPart1.osm"
+      map_path: "~/ros2_lanelet2_ws/src/AMR-Logistic-System/amr_navigation_system/laneletMaps/HS-SchmalkaldenPart1.osm"
       # debug_path will use the default if not specified
       # Uncomment and modify this line if you want to override the default debug path
       debug_path: "~/.local/share/AMR/graph_debug"

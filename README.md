@@ -99,6 +99,8 @@ colcon build --packages-select amr_interfaces amr_navigation_system
    ros2 pkg list | grep amr_navigation_system
    ```
 
+3. Update the `map_path` variable value in `amr_navigation_system/config/global_path_planner_params.yaml` as per your folder structure. 
+
 For any installation issues, please check the log files or create an issue in the repository.
 
 

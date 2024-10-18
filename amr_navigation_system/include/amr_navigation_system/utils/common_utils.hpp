@@ -45,6 +45,7 @@ inline bool isWithinBounds(const GPSPoint& point, const BoundingBox& bbox) {
 
 bool checkFileExists(const std::string& filePath);
 void createDirectory(const std::string& dirPath);
+std::string expandTilde(const std::string& path);
 std::string getDefaultDebugPath();
 
 }  // namespace amr_navigation

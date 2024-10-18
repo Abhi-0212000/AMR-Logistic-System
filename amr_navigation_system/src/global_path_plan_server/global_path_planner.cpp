@@ -31,6 +31,8 @@ public:
         // Load the declared parameters
         loadParameters();
 
+        map_path_ = amr_navigation::expandTilde(map_path_);
+
         logger_ = std::make_shared<amr_logging::NodeLogger>(log_path_, "amr_navigation_system", "amr_global_path_planner", log_file_type_, log_level_);
 
         // Check map file and create debug directory if needed

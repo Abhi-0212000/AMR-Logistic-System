@@ -1,6 +1,7 @@
 #include "amr_navigation_system/utils/common_utils.hpp"
 #include <stdexcept>
 #include <cstdlib>
+#include <pwd.h> // Include this header for getpwuid
 
 namespace fs = std::filesystem;
 
@@ -16,6 +17,17 @@ void createDirectory(const std::string& dirPath) {
             throw std::runtime_error("Failed to create directory: " + dirPath);
         }
     }
+}
+
+std::string expandTilde(const std::string& path) {
+    if (!path.empty() && path[0] == '~') {
+        const char* home = getenv("HOME");
+        if (!home) {
+            home = getpwuid(getuid())->pw_dir;
+        }
+        return std::string(home) + path.substr(1);
+    }
+    return path;
 }
 
 std::string getDefaultDebugPath() {
