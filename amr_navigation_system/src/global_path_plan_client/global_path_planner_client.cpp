@@ -1,132 +1,223 @@
 #include "rclcpp/rclcpp.hpp"
 #include "amr_interfaces/srv/compute_global_path.hpp"
 #include <thread>
+#include "amr_navigation_system/utils/logger.hpp"
 
 class GlobalPathPlannerClient : public rclcpp::Node {
 public:
-    GlobalPathPlannerClient() : Node("amr_global_path_planner_client") {
-        // Declare parameters
+    GlobalPathPlannerClient() 
+        : Node("amr_global_path_planner_client") 
+    {
+        initializeParameters();
+        loadParameters();
+        initializeLogger();
+        startServiceThread();
+    }
+
+    ~GlobalPathPlannerClient() {
+        cleanup();
+    }
+
+private:
+    // Member variables
+    std::thread service_thread_;
+    std::shared_ptr<amr_logging::NodeLogger> logger_;
+
+    // GPS coordinates
+    struct GpsPoint {
+        double latitude;
+        double longitude;
+        double altitude;
+    };
+    GpsPoint start_point_;
+    GpsPoint end_point_;
+    
+    // Configuration
+    bool use_time_based_routing_;
+    std::string log_path_;
+    std::string log_file_type_;
+    int log_level_;
+
+    // Initialize parameter declarations
+    void initializeParameters() {
+        // GPS parameters
         this->declare_parameter<double>("start_latitude", 50.71575968934);
         this->declare_parameter<double>("start_longitude", 10.46831175618);
         this->declare_parameter<double>("start_altitude", 0.0);
         this->declare_parameter<double>("end_latitude", 50.71506975439);
         this->declare_parameter<double>("end_longitude", 10.46775855057);
         this->declare_parameter<double>("end_altitude", 0.0);
+        
+        // Routing parameters
         this->declare_parameter<bool>("use_time_based_routing", false);
 
-        // Load parameters from YAML configuration file
-        loadParameters();
+        // Logger parameters
+        this->declare_parameter<std::string>("log_data.log_path", "~/.local/share/AMR/logs");
+        this->declare_parameter<std::string>("log_data.log_file_type", "json");
+        this->declare_parameter<int>("log_data.log_level", 1);
+    }
 
-        // Start the service call in a separate thread
+    // Load parameters from ROS
+    void loadParameters() {
+        // Load GPS coordinates
+        this->get_parameter("start_latitude", start_point_.latitude);
+        this->get_parameter("start_longitude", start_point_.longitude);
+        this->get_parameter("start_altitude", start_point_.altitude);
+        this->get_parameter("end_latitude", end_point_.latitude);
+        this->get_parameter("end_longitude", end_point_.longitude);
+        this->get_parameter("end_altitude", end_point_.altitude);
+        
+        // Load routing configuration
+        this->get_parameter("use_time_based_routing", use_time_based_routing_);
+
+        // Load logger configuration
+        this->get_parameter("log_data.log_path", log_path_);
+        this->get_parameter("log_data.log_file_type", log_file_type_);
+        this->get_parameter("log_data.log_level", log_level_);
+    }
+
+    // Initialize logger
+    void initializeLogger() {
+        logger_ = std::make_shared<amr_logging::NodeLogger>(
+            log_path_,
+            "amr_navigation_system",
+            "global_path_planner_client",
+            log_file_type_,
+            log_level_
+        );
+
+        // Log initial parameters
+        logGpsCoordinates();
+        RCLCPP_INFO(this->get_logger(), "Client node to the server 'global_path_planner' has been started.");
+        logger_->log_info("Client node to the server 'global_path_planner' has been started.", 
+                         __FILE__, __LINE__, __FUNCTION__);
+    }
+
+    void logGpsCoordinates() {
+        logger_->log_debug(
+            fmt::format("Start Point (lat, lon, alt): ({:.6f}, {:.6f}, {:.6f})", 
+                       start_point_.latitude, start_point_.longitude, start_point_.altitude),
+            __FILE__, __LINE__, __FUNCTION__
+        );
+        logger_->log_debug(
+            fmt::format("End Point (lat, lon, alt): ({:.6f}, {:.6f}, {:.6f})", 
+                       end_point_.latitude, end_point_.longitude, end_point_.altitude),
+            __FILE__, __LINE__, __FUNCTION__
+        );
+    }
+
+    // Start service thread
+    void startServiceThread() {
         service_thread_ = std::thread(&GlobalPathPlannerClient::callGlobalPathPlannerService, this);
     }
 
-    ~GlobalPathPlannerClient() {
+    // Clean up resources
+    void cleanup() {
         if (service_thread_.joinable()) {
-            service_thread_.join();  // Ensure the thread finishes execution
+            service_thread_.join();
+        }
+        if (logger_) {
+            RCLCPP_INFO(this->get_logger(), "Shutting down the client node and Flushing the logs...");
+            logger_->log_info("Shutting down the client node and Flushing the logs...", 
+                            __FILE__, __LINE__, __FUNCTION__);
         }
     }
 
-    void loadParameters() {
-        // Load the parameters
-        this->get_parameter("start_latitude", start_latitude_);
-        this->get_parameter("start_longitude", start_longitude_);
-        this->get_parameter("start_altitude", start_altitude_);
-        this->get_parameter("end_latitude", end_latitude_);
-        this->get_parameter("end_longitude", end_longitude_);
-        this->get_parameter("end_altitude", end_altitude_);
-        this->get_parameter("use_time_based_routing", use_time_based_routing_);
-
-        // Log loaded parameters
-        RCLCPP_INFO(this->get_logger(), "Start Point (lat, lon, alt): (%.6f, %.6f, %.2f)", 
-                    start_latitude_, start_longitude_, start_altitude_);
-        RCLCPP_INFO(this->get_logger(), "End Point (lat, lon, alt): (%.6f, %.6f, %.2f)", 
-                    end_latitude_, end_longitude_, end_altitude_);
+    // Create service request
+    auto createServiceRequest() {
+        auto request = std::make_shared<amr_interfaces::srv::ComputeGlobalPath::Request>();
+        request->start_latitude = start_point_.latitude;
+        request->start_longitude = start_point_.longitude;
+        request->start_altitude = start_point_.altitude;
+        request->end_latitude = end_point_.latitude;
+        request->end_longitude = end_point_.longitude;
+        request->end_altitude = end_point_.altitude;
+        request->use_time_based_routing = use_time_based_routing_;
+        return request;
     }
-    
+
+    // Handle successful response
+    void handleSuccessfulResponse(const amr_interfaces::srv::ComputeGlobalPath::Response::SharedPtr& response) {
+        logger_->log_info("Path planning successful", __FILE__, __LINE__, __FUNCTION__);
+        logger_->log_info(fmt::format("Total distance: {:.2f} meters", response->total_distance), 
+                         __FILE__, __LINE__, __FUNCTION__);
+        logger_->log_info(fmt::format("Estimated time: {:.2f} seconds", response->estimated_time), 
+                         __FILE__, __LINE__, __FUNCTION__);
+
+        // Log lanelet IDs
+        std::string lanelet_ids_str = fmt::format("Lanelet IDs: [{}]", 
+                                                 fmt::join(response->lanelet_ids, ", "));
+        logger_->log_info(lanelet_ids_str, __FILE__, __LINE__, __FUNCTION__);
+
+        // Log inversion statuses
+        std::vector<std::string> inversion_statuses;
+        for (size_t i = 0; i < response->is_inverted.size(); ++i) {
+            inversion_statuses.push_back(
+                fmt::format("{}: {}", 
+                          response->lanelet_ids[i], 
+                          response->is_inverted[i] ? "true" : "false")
+            );
+        }
+        std::string inversion_statuses_str = fmt::format("Inverted statuses: [{}]", 
+                                                        fmt::join(inversion_statuses, ", "));
+        logger_->log_info(inversion_statuses_str, __FILE__, __LINE__, __FUNCTION__);
+    }
+
+    // Handle failed response
+    void handleFailedResponse(const amr_interfaces::srv::ComputeGlobalPath::Response::SharedPtr& response) {
+        RCLCPP_ERROR(this->get_logger(), "Path planning failed. Status: %d, Message: %s", 
+                    response->status, response->message.c_str());
+        logger_->log_error(fmt::format("Path planning failed. Status: {}, Message: {}", 
+                          response->status, response->message.c_str()), 
+                          __FILE__, __LINE__, __FUNCTION__);
+    }
+
+    // Main service call function
     void callGlobalPathPlannerService() {
         auto client = this->create_client<amr_interfaces::srv::ComputeGlobalPath>("global_path_planner");
 
-        // Wait for the service to be available
+        // Wait for service availability
         while (!client->wait_for_service(std::chrono::seconds(1))) {
             if (!rclcpp::ok()) {
                 RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service. Exiting.");
+                logger_->log_error("Interrupted while waiting for the service. Exiting.", 
+                                 __FILE__, __LINE__, __FUNCTION__);
                 return;
             }
-            RCLCPP_INFO(this->get_logger(), "Waiting for the service to be available...");
+            RCLCPP_WARN(this->get_logger(), "Waiting for the service to be available...");
+            logger_->log_warn("Waiting for the service to be available...", 
+                            __FILE__, __LINE__, __FUNCTION__);
         }
 
-        // Prepare the request
-        auto request = std::make_shared<amr_interfaces::srv::ComputeGlobalPath::Request>();
-        request->start_latitude = start_latitude_;
-        request->start_longitude = start_longitude_;
-        request->start_altitude = start_altitude_;
-        request->end_latitude = end_latitude_;
-        request->end_longitude = end_longitude_;
-        request->end_altitude = end_altitude_;
-        request->use_time_based_routing = use_time_based_routing_;
-
-        // Send the request asynchronously
+        auto request = createServiceRequest();
         auto future = client->async_send_request(request);
 
-        // Get the response (blocking until response is received)
         try {
-            auto response = future.get();  // Wait for the response
+            auto response = future.get();
             if (response->status == 0) {
-                RCLCPP_INFO(this->get_logger(), "Path planning successful");
-                RCLCPP_INFO(this->get_logger(), "Total distance: %.2f meters", response->total_distance);
-                RCLCPP_INFO(this->get_logger(), "Estimated time: %.2f seconds", response->estimated_time);
-
-                // Print lanelet IDs and inversion status
-                RCLCPP_INFO(this->get_logger(), "Lanelet IDs: ");
-                for (const auto &id : response->lanelet_ids) {
-                    RCLCPP_INFO(this->get_logger(), "%ld", id);  // Print each lanelet ID
-                }
-
-                RCLCPP_INFO(this->get_logger(), "Inverted statuses: ");
-                for (size_t i = 0; i < response->is_inverted.size(); ++i) {
-                    RCLCPP_INFO(this->get_logger(), "Lanelet ID %ld is inverted: %s", response->lanelet_ids[i], 
-                                response->is_inverted[i] ? "true" : "false");
-                }
+                handleSuccessfulResponse(response);
             } else {
-                RCLCPP_WARN(this->get_logger(), "Path planning failed. Status: %d, Message: %s", 
-                            response->status, response->message.c_str());
+                handleFailedResponse(response);
             }
         } catch (const std::exception &e) {
             RCLCPP_ERROR(this->get_logger(), "Service call failed: %s", e.what());
+            logger_->log_error(fmt::format("Service call failed: {}", e.what()), 
+                             __FILE__, __LINE__, __FUNCTION__);
         }
 
-        // After receiving the response, shut down the node
         rclcpp::shutdown();
     }
-
-private:
-    std::thread service_thread_;  // Thread for the service call
-
-    // Request parameters
-    double start_latitude_;
-    double start_longitude_;
-    double start_altitude_;
-    double end_latitude_;
-    double end_longitude_;
-    double end_altitude_;
-    bool use_time_based_routing_;
 };
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
-    // Load parameters from the YAML file
-    auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true)
-                                        .automatically_declare_parameters_from_overrides(true);
+    auto options = rclcpp::NodeOptions()
+        .allow_undeclared_parameters(true)
+        .automatically_declare_parameters_from_overrides(true);
 
-    // Create the client node
     auto node = std::make_shared<GlobalPathPlannerClient>();
-
-    // Spin the node (main thread)
     rclcpp::spin(node);
-
-    // Ensure clean shutdown
     rclcpp::shutdown();
     return 0;
 }

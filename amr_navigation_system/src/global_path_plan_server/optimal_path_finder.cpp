@@ -4,8 +4,11 @@
 
 namespace amr_navigation {
 
-OptimalPathFinder::OptimalPathFinder() {}
+// Constructor
+OptimalPathFinder::OptimalPathFinder(std::shared_ptr<amr_logging::NodeLogger> logger)
+    : logger_(logger) {}
 
+// Destructor
 OptimalPathFinder::~OptimalPathFinder() {}
 
 lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
@@ -19,43 +22,37 @@ lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
     lanelet::Optional<lanelet::routing::LaneletOrAreaPath> bestPath;
     double shortestDistance = std::numeric_limits<double>::max();
 
-    // Helper lambda to reduce redundancy
+    // Lambda function to try different path combinations (inverted start/end)
     auto tryPath = [&](const lanelet::ConstLaneletOrArea& start, const lanelet::ConstLaneletOrArea& end) {
         auto path = graph.shortestPathIncludingAreas(start, end, 0, false);
         if (path) {
-            // Collect the IDs of all the elements in the path (both lanelets and areas)
+            // Log path IDs for debugging purposes
             std::stringstream path_ids;
             for (const auto& element : path.get()) {
-                path_ids << element.id() << " -> "; // Append each ID to the stream
+                path_ids << element.id() << " -> ";
             }
-            path_ids << "END"; // Mark the end of the path
+            path_ids << "END";
             
-            // Log the path and distance
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Trying path with IDs: %s", path_ids.str().c_str());
+            logger_->log_debug(fmt::format("Trying path with IDs: {}.", path_ids.str().c_str()), __FILE__, __LINE__, __FUNCTION__);
 
+            // Calculate and log the path distance
             double distance = calculatePathDistance(path.get());
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Path distance: %.2f meters.", distance);
+
+        logger_->log_debug(fmt::format("Path distance: {} meters.", distance), __FILE__, __LINE__, __FUNCTION__);
 
             if (distance < shortestDistance) {
                 bestPath = path;
                 shortestDistance = distance;
-                RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                            "New shortest path found with distance: %.2f meters.", shortestDistance);
+                logger_->log_debug(fmt::format("New shortest path found with distance: {} meters.", shortestDistance), __FILE__, __LINE__, __FUNCTION__);
             }
         } else {
-            RCLCPP_WARN(rclcpp::get_logger("OptimalPathFinder"), 
-                        "No valid path found from start ID %ld to end ID %ld.", start.id(), end.id());
+            logger_->log_warn(fmt::format("No valid path found from start ID {} to end ID {}.", start.id(), end.id()), __FILE__, __LINE__, __FUNCTION__);
         }
     };
 
+    logger_->log_debug(fmt::format("Finding optimal path from start ID {} to end ID {}...", start_id, end_id), __FILE__, __LINE__, __FUNCTION__);
 
-    // Log start and end points
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Finding optimal path from start ID %ld to end ID %ld.", start_id, end_id);
-
-    // Optimize path checking by avoiding redundant checks
+    // Try different combinations of lanelet and area inversion for start and end
     if (start_is_lanelet) {
         lanelet::ConstLanelet start = map->laneletLayer.get(start_id);
         if (end_is_lanelet) {
@@ -82,14 +79,13 @@ lanelet::routing::LaneletOrAreaPath OptimalPathFinder::getOptimalPath(
     }
 
     if (!bestPath) {
-        RCLCPP_ERROR(rclcpp::get_logger("OptimalPathFinder"), "Optimal path not found.");
+        logger_->log_error("Optimal path not found.", __FILE__, __LINE__, __FUNCTION__);
         throw std::runtime_error("Optimal path not found.");
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Optimal path successfully found with total distance: %.2f meters.", shortestDistance);
+    logger_->log_info(fmt::format("Optimal path found with shortest distance: {} meters.", shortestDistance), __FILE__, __LINE__, __FUNCTION__);
     return bestPath.get();
 }
+
 
 PathResponse OptimalPathFinder::buildPathResponse(
     const lanelet::routing::LaneletOrAreaPath& path,
@@ -100,29 +96,24 @@ PathResponse OptimalPathFinder::buildPathResponse(
     response.estimated_time = estimateTravelTime(path, amrTrafficRules);
     response.status = 0;  // Success
 
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Building path response: Total distance = %.2f meters, Estimated time = %.2f seconds.",
-                response.total_distance, response.estimated_time);
+    logger_->log_info(fmt::format("Building path response: Total distance = {:.2f} meters, Estimated time = {:.2f} seconds.", response.total_distance, response.estimated_time), __FILE__, __LINE__, __FUNCTION__);
 
     for (const auto& element : path) {
         if (element.isLanelet()) {
             auto lanelet = static_cast<lanelet::ConstLanelet>(element);
             response.lanelet_ids.push_back(static_cast<int64_t>(lanelet.id()));
             response.is_inverted.push_back(lanelet.inverted());
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Lanelet ID %ld added to path, Inverted: %s", 
-                        lanelet.id(), lanelet.inverted() ? "true" : "false");
+            logger_->log_debug(fmt::format("Lanelet ID {} added to path, Inverted: {}", lanelet.id(), lanelet.inverted() ? "true" : "false"), __FILE__, __LINE__, __FUNCTION__);
         } else if (element.isArea()) {
             auto area = static_cast<lanelet::ConstArea>(element);
             response.lanelet_ids.push_back(static_cast<int64_t>(area.id()));
             response.is_inverted.push_back(false);  // Areas are not inverted
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Area ID %ld added to path.", area.id());
+            logger_->log_debug(fmt::format("Area ID {} added to path.", area.id()), __FILE__, __LINE__, __FUNCTION__);
         }
     }
 
     response.message = "Optimal path successfully computed.";
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), "Path response built successfully.");
+    logger_->log_info("Path response built successfully.", __FILE__, __LINE__, __FUNCTION__);
     return response;
 }
 
@@ -131,9 +122,8 @@ NearestElement OptimalPathFinder::getNearestLaneletOrArea(
     const GPSPoint& gps_point,
     const GPSPoint& origin_point,
     double max_dist_threshold) {
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"),
-                "Getting nearest lanelet or area for GPS point (%.6f, %.6f).",
-                gps_point.latitude, gps_point.longitude);
+    logger_->log_debug(fmt::format("Getting nearest lanelet or area for GPS point ({:.6f}, {:.6f}).",
+                gps_point.latitude, gps_point.longitude), __FILE__, __LINE__, __FUNCTION__);
 
     lanelet::BasicPoint2d utm_point = convertGPSToUTM(gps_point, origin_point);
 
@@ -175,15 +165,12 @@ NearestElement OptimalPathFinder::getNearestLaneletOrArea(
 
     // Check if the nearest element is within the threshold distance
     if (min_distance > max_dist_threshold) {
-        RCLCPP_ERROR(rclcpp::get_logger("OptimalPathFinder"),
-                        "No nearby navigable lanelet or area found within the threshold distance.");
+        logger_->log_error("No nearby navigable lanelet or area found within the threshold distance.", __FILE__, __LINE__, __FUNCTION__);
         throw std::runtime_error("No nearby navigable lanelet or area found within the threshold distance.");
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"),
-                "Nearest %s found: ID = %ld at distance of %.2f",
+    logger_->log_debug(fmt::format("Nearest {} found: ID = {} at distance of {:.2f}",
                 nearest_element.isLanelet ? "lanelet" : "area",
-                nearest_element.id, min_distance);
+                nearest_element.id, min_distance), __FILE__, __LINE__, __FUNCTION__);
 
     return nearest_element;
 }
@@ -193,9 +180,8 @@ lanelet::BasicPoint2d OptimalPathFinder::convertGPSToUTM(const GPSPoint& gps_poi
     lanelet::GPSPoint gps = {gps_point.latitude, gps_point.longitude, gps_point.altitude};
 
     lanelet::BasicPoint3d utm_point = projector.forward(gps);
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Converted GPS (%.6f, %.6f) to UTM (%.2f, %.2f).",
-                gps.lat, gps.lon, utm_point.x(), utm_point.y());
+    logger_->log_debug(fmt::format("Converted GPS ({:.6f}, {:.6f}) to UTM ({:.2f}, {:.2f}).",
+                gps.lat, gps.lon, utm_point.x(), utm_point.y()), __FILE__, __LINE__, __FUNCTION__);
     return lanelet::BasicPoint2d(utm_point.x(), utm_point.y());
 }
 
@@ -205,9 +191,7 @@ double OptimalPathFinder::calculatePathDistance(const lanelet::routing::LaneletO
     for (size_t i = 0; i < path.size() - 1; ++i) {
         total_distance += getLength(path[i]) + getLength(path[i + 1]);
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Total path distance: %.2f meters.", total_distance);
+    logger_->log_debug(fmt::format("Total path distance: {:.2f} meters.", total_distance), __FILE__, __LINE__, __FUNCTION__);
 
     return total_distance;
 }
@@ -226,9 +210,7 @@ double OptimalPathFinder::getLength(const lanelet::ConstLaneletOrArea& la) const
             length = boost::geometry::perimeter(lanelet::utils::to2D(areaOpt.get().outerBoundPolygon()));
         }
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Length of lanelet/area (ID %ld): %.2f meters.", la.id(), length);
+    logger_->log_debug(fmt::format("Length of lanelet/area (ID {}): {:.2f} meters.", la.id(), length), __FILE__, __LINE__, __FUNCTION__);
     
     return length;
 }
@@ -240,9 +222,7 @@ double OptimalPathFinder::estimateTravelTime(const lanelet::routing::LaneletOrAr
     for (const auto& la : path) {
         total_time += getTravelTime(la, amrTrafficRules);
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                "Total estimated travel time: %.2f seconds.", total_time);
+    logger_->log_debug(fmt::format("Total estimated travel time: {:.2f} seconds.", total_time), __FILE__, __LINE__, __FUNCTION__);
 
     return total_time;
 }
@@ -257,9 +237,8 @@ double OptimalPathFinder::getTravelTime(const lanelet::ConstLaneletOrArea& la,
             double length = lanelet::geometry::approximatedLength2d(laneletOpt.get());
             lanelet::Velocity speedLimit = amrTrafficRules.speedLimit(laneletOpt.get()).speedLimit;
             time = length / speedLimit.value();
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Lanelet ID %ld: Length = %.2f meters, Speed Limit = %.2f m/s, Estimated time = %.2f seconds.",
-                        la.id(), length, speedLimit.value(), time);
+            logger_->log_debug(fmt::format("Lanelet ID {}: Length = {:.2f} meters, Speed Limit = {:.2f} m/s, Estimated time = {:.2f} seconds.",
+                        la.id(), length, speedLimit.value(), time), __FILE__, __LINE__, __FUNCTION__);
         }
     } else {
         auto areaOpt = la.area();
@@ -267,9 +246,8 @@ double OptimalPathFinder::getTravelTime(const lanelet::ConstLaneletOrArea& la,
             double perimeter = boost::geometry::perimeter(lanelet::utils::to2D(areaOpt.get().outerBoundPolygon()));
             lanelet::Velocity speedLimit = amrTrafficRules.speedLimit(areaOpt.get()).speedLimit;
             time = perimeter / speedLimit.value();
-            RCLCPP_INFO(rclcpp::get_logger("OptimalPathFinder"), 
-                        "Area ID %ld: Perimeter = %.2f meters, Speed Limit = %.2f m/s, Estimated time = %.2f seconds.",
-                        la.id(), perimeter, speedLimit.value(), time);
+            logger_->log_debug(fmt::format("Area ID {}: Perimeter = {:.2f} meters, Speed Limit = {:.2f} m/s, Estimated time = {:.2f} seconds.",
+                        la.id(), perimeter, speedLimit.value(), time), __FILE__, __LINE__, __FUNCTION__);
         }
     }
 

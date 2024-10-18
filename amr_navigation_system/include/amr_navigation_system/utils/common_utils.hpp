@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <filesystem>
 #include <cstdint>
 #include <lanelet2_core/primitives/Lanelet.h>
 
@@ -41,6 +42,11 @@ inline bool isWithinBounds(const GPSPoint& point, const BoundingBox& bbox) {
     return point.latitude >= bbox.min_lat && point.latitude <= bbox.max_lat &&
            point.longitude >= bbox.min_lon && point.longitude <= bbox.max_lon;
 }
+
+bool checkFileExists(const std::string& filePath);
+void createDirectory(const std::string& dirPath);
+std::string expandTilde(const std::string& path);
+std::string getDefaultDebugPath();
 
 }  // namespace amr_navigation
 
