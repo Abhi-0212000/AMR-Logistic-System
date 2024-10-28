@@ -1,0 +1,12 @@
+Semantic Versioning (SemVer):
+
+follows the format MAJOR.MINOR.PATCH.
+    MAJOR: Indicates a breaking change to the software.
+    MINOR: Represents a new feature or functionality.
+    PATCH: Denotes bug fixes or minor changes.
+    
+Example:
+    Version 0.1.0: Initial development stage, focusing on core functionalities without perception or dynamic objects.
+    Version 1.0.0: Major release with the first stable version including perception and dynamic object handling.
+    Version 1.1.0: New feature added, such as improved obstacle avoidance.
+    Version 1.1.1: Bug fixes or minor enhancements.
