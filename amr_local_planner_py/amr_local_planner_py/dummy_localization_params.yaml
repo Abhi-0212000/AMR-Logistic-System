@@ -1,0 +1,18 @@
+# dummy_localization_params.yaml
+# dummy localization params used in dummy_localization_node.cpp
+# Node name is = amr_dummy_localization, executable name set in CMakeLists.txt is "amr_dummy_localization"
+
+amr_dummy_localization_py:
+  ros__parameters:
+    # GPS data is in DD (Decimal Degree) Format
+    origins:
+      # gps_origin is used to convert GPS data to UTM. It has to be the same origin used to load the .OSM map in Global Path Planner node.
+      gps_origin:
+        latitude: 50.7153508
+        longitude: 10.4680332
+        altitude: 0.0
+    robot_initial_gps_pos:
+      # Initial position of the robot in the map (.osm which is in Earth Frame lat, lon) frame
+      latitude: 50.7154014
+      longitude: 10.4683083
+      altitude: 0.0
