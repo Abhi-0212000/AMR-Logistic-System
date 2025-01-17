@@ -10,6 +10,9 @@ endif()
 find_package(ament_cmake REQUIRED)
 # ROS dependencies
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+# builtin_interfaces provides some lower-level types like time and duration, which are used by the Header message
+find_package(builtin_interfaces REQUIRED)  # Needed for std_msgs/Header
 
 # One-time setup code for ROS 2 interface generation
 find_package(rosidl_default_generators REQUIRED)
@@ -18,8 +21,12 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "srv/ComputeGlobalPath.srv" # This .srv is not depending on geometry_msgs pkg.
-  "msg/LogMessage.msg"
-  DEPENDENCIES geometry_msgs  # Ensure that the generated service can depend on geometry_msgs
+  "srv/AmrGoalManagement.srv"
+  "msg/RobotPose.msg"
+  "msg/TrajectoryPoint.msg"
+  "action/NavigateToGoal.action"
+  "msg/Trajectory.msg"
+  DEPENDENCIES geometry_msgs std_msgs # Ensure that the generated service can depend on geometry_msgs
 )
 
 # Export the rosidl runtime to allow other packages to use the generated service
