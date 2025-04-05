@@ -19,7 +19,6 @@ find_package(pybind11 REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
-# Set GeographicLib CMake module path exactly as in amr_local_planner
 list(APPEND CMAKE_MODULE_PATH "/usr/share/cmake/geographiclib")
 find_package(GeographicLib REQUIRED)
 

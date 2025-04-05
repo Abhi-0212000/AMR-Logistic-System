@@ -12,7 +12,8 @@
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
   <depend>pybind11_vendor</depend>
-  <depend>GeographicLib</depend>
+  <depend>pybind11-dev</depend>
+  <depend>geographiclib</depend>
   <depend>python3-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
