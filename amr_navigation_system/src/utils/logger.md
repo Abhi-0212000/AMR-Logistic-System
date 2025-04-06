@@ -42,7 +42,7 @@ The AMR Navigation System Logger is a thread-safe, asynchronous logging utility 
 Add these dependencies to your `package.xml`:
 ```xml
 <depend>spdlog</depend>
-<depend>nlohmann_json</depend>
+<depend>nlohmann-json-dev</depend>
 <depend>rclcpp</depend>
 ```
 
