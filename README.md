@@ -135,8 +135,6 @@ This project utilizes the following open-source resources:
 - **ROS2 Humble**: Robotics middleware
 - **CycloneDDS**: Fast and robust DDS implementation
 
-Developed for internal use at Hochschule Schmalkalden for R&D, teaching, and research purposes.
-
 ## Support
 
 For additional help:
