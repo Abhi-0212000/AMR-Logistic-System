@@ -1,175 +1,143 @@
 # AMR-Logistic-System
+
 This repository contains the code and documentation for an Autonomous Mobile Robot (AMR) designed for efficient delivery and logistics operations. The system integrates advanced navigation, sensor fusion, and path planning algorithms to ensure reliable and autonomous delivery within various environments.
 
-## Packages
+## Containerized Approach
 
-This repository currently includes two ROS2 packages, with potential for future expansion:
+The AMR-Logistic-System now uses a containerized approach with Docker, making deployment and setup much easier across different environments.
 
-1. **amr_interfaces**:
-    - Provides custom ROS2 interface types.
-    - Includes one service file:
-      - `ComputeGlobalPath.srv`: Facilitates communication between the `global_path_planner` and `global_path_planner_client` nodes in the `amr_navigation_system` package.
+## System Requirements
 
-2. **amr_navigation_system**:
-    - A ROS2 package for autonomous navigation of mobile robots using the Lanelet2 library.
-    - Implements core navigation functionalities.
-    - **Dependencies**:
-      - `rclcpp`: Included with ROS2 Humble installation.
-      - `lanelet2`: Must be installed separately.
-      - `rclcpp, fmt, nlohmann-json3-dev`
-    - **Key Features**:
-      - Global path planning using Lanelet2.
-      - GPS filtering and nearest-lanelet detection.
-      - Map boundary validation and non-navigable area exclusion.
-      - Scalable for large-scale environments and custom maps.
+- Ubuntu Linux (recommended: 20.04 or 22.04)
+- ROS2 Humble - Install following the [official guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+- Docker and Docker Compose
+- Sufficient disk space (~3GB for Docker images and containers)
 
-## Installation
+## Quick Start Guide
 
-### 1. Set up ROS2 Humble
-Ensure ROS2 Humble is installed on your system. If not, follow the official [ROS2 installation guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html#install-ros-2-packages).
+### 1. Create ROS2 Workspace and Clone Repository
 
-### 2. Install Lanelet2
-Choose one of the following methods:
-
-#### Option A: From Source
 ```bash
-# Clone into your ROS2 workspace
-cd ~/ros2_ws/src
-git clone https://github.com/fzi-forschungszentrum-informatik/lanelet2.git
-
-# Build packages
-cd ~/ros2_ws
-colcon build --packages-up-to lanelet2
-```
-
-#### Option B: From Package Manager
-```bash
-sudo apt install ros-humble-lanelet2
-```
-For more details, refer to the [Lanelet2 documentation](https://github.com/fzi-forschungszentrum-informatik/Lanelet2).
-
-### 3. Install Required Dependencies
-
-#### System Dependencies
-```bash
-# Install spdlog and fmt
-sudo apt install libspdlog-dev libfmt-dev
-
-# Install nlohmann-json
-sudo apt install nlohmann-json3-dev
-```
-
-### 4. Clone the Repository
-```bash
-# Navigate to your ROS2 workspace
+# Create ROS2 workspace directory structure
+mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 
 # Clone the repository
 git clone https://github.com/Abhi-0212000/AMR-Logistic-System.git
 ```
-Note: This repository is currently private.
 
-### 5. Build the Packages
+### 2. Set Up Host-Container Communication
+
+To enable communication between your host system and the Docker container, add the following environment variables to your `~/.bashrc` file:
+
 ```bash
-# Navigate to workspace root
-cd ~/ros2_ws
-
-# Build the packages
-colcon build --packages-select amr_interfaces amr_navigation_system
+# Add these lines to ~/.bashrc
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=~/.ros/cyclonedds.xml
+export ROS_DOMAIN_ID=99  # Choose any number between 1-256
 ```
-### System Requirements
 
-- Ubuntu 22.04 (recommended)
-- ROS2 Humble
-- CMake version 3.8 or higher
-- C++17 or higher
-- Sufficient disk space (~2GB for all dependencies)
-
-### Post-Installation Setup
-
-1. Source the workspace:
-   ```bash
-   echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-   echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-2. Verify environment setup:
-   ```bash
-   ros2 pkg list | grep amr_navigation_system
-   ```
-
-3. Update the `map_path` variable value in `amr_navigation_system/config/global_path_planner_params.yaml` as per your folder structure. 
-
-For any installation issues, please check the log files or create an issue in the repository.
-
-
-## Current Folder Structure
-
-```plaintext
-ros2_ws
-└── src
-     ├── AMR-Logistic-System
-     │   ├── amr_interfaces
-     │   │   ├── msg
-     │   │   ├── srv
-     │   │   │   └── ComputeGlobalPath.srv
-     │   │   ├── CMakeLists.txt
-     │   │   └── package.xml
-     │   └── amr_navigation_system
-     │       ├── config
-     │       │   ├── client_params.yaml
-     │       │   └── global_path_planner_params.yaml
-     │       ├── include/amr_navigation_system
-     │       │   ├── global_path_plan_client
-     │       │   └── global_path_plan_server
-     │       │       ├── amr_traffic_rules.hpp
-     │       │       ├── graph_builder.hpp
-     │       │       └── optimal_path_planner.hpp
-     │       ├── utils
-     │       │   └── common_utils.hpp
-     │       │   └── logger.hpp
-     │       ├── laneletMaps
-     │       ├── src
-     │       |   ├── global_path_plan_client
-     │       |   │   └── global_path_planner_client.cpp
-     │       |   └── global_path_plan_server
-     │       |       ├── amr_traffic_rules.cpp
-     │       |       ├── graph_builder.cpp
-     │       |       ├── optimal_path_planner.cpp
-     │       |       └── global_path_planner.cpp
-     │       ├── utils
-     │       │   └── common_utils.hpp
-     │       │   └── logger.hpp
-     │       │   └── logger.md
-     │       ├── CMakeLists.txt
-     │       ├── package.xml
-     │       └── amr_navigation_system.md 
-     └── lanelet2 (Depends on whether you have build the lanelet2 from source code or through pkg manager)
+Then source your bashrc file:
+```bash
+source ~/.bashrc
 ```
+
+### 3. Configure CycloneDDS
+
+Copy the provided CycloneDDS configuration file to your ROS configuration directory:
+
+```bash
+# Create the directory if it doesn't exist
+mkdir -p ~/.ros
+
+# Copy the configuration file
+cp ~/ros2_ws/src/AMR-Logistic-System/cyclonedds.xml ~/.ros/
+```
+
+### 4. Install Docker
+
+Install Docker by following the official Docker installation guide for Ubuntu:
+[https://docs.docker.com/engine/install/ubuntu/](https://docs.docker.com/engine/install/ubuntu/)
+
+### 5. Launch the Containerized System
+
+```bash
+# Navigate to the repository directory
+cd ~/ros2_ws/src/AMR-Logistic-System/
+
+# Start the Docker containers
+docker compose up
+```
+
+## Repository Structure
+
+This repository currently includes two ROS2 packages:
+
+1. **amr_interfaces**:
+    - Provides custom ROS2 interface types.
+    - Includes `ComputeGlobalPath.srv` service for communication between planning nodes.
+
+2. **amr_navigation_system**:
+    - ROS2 package for autonomous navigation using the Lanelet2 library.
+    - Implements global path planning, GPS filtering, and map boundary validation.
+
+## Working with the Containerized Environment
+
+### Accessing the Container
+
+To start an interactive shell session in the running container:
+
+```bash
+docker exec -it amr-logistic-system-container bash
+```
+
+### Running ROS2 Commands on the Host
+
+With the proper communication settings, you can run ROS2 commands on your host that interact with the container:
+
+```bash
+# List active ROS2 topics
+ros2 topic list
+
+# View node graph
+ros2 node list
+```
+
+## Troubleshooting
+
+### Communication Issues
+
+- Ensure that the `ROS_DOMAIN_ID` is the same on both host and container
+- Verify that the CycloneDDS configuration is correctly set up
+- Check that the `cyclonedds.xml` file is in the correct location
+
+### Docker Issues
+
+- Ensure Docker service is running: `sudo systemctl status docker`
+- Check Docker logs for errors: `docker logs amr-logistic-system-container`
 
 ## Documentation
 
-For detailed information on using the `amr_navigation_system` package and its functionalities, refer to the inline code documentation and Doxygen comments available in the source files.
+For detailed information on using the packages and their functionalities, refer to the inline code documentation and additional documentation files:
 
-Each package contains its own `.md` files with detailed documentation:
-
-`amr_navigation_system/amr_navigation_system.md`
-`amr_navigation_system/utils/logger.md`   -    Logging System Documentation
+- `amr_navigation_system/amr_navigation_system.md`
+- `amr_navigation_system/utils/logger.md` - Logging System Documentation
 
 ## Future Plans
 
-This package is intended for internal use at Hochschule Schmalkalden for R&D, teaching, and research purposes. It serves as a foundation for future publications and enhancements, with plans to incorporate additional packages and functionalities.
+This package is intended for internal use at Hochschule Schmalkalden for R&D, teaching, and research purposes. It serves as a foundation for future publications and enhancements.
 
 ## Acknowledgments
 
 This project utilizes the following open-source resources:
-- **Lanelet2**: For map handling and routing. [Lanelet2 GitHub](https://github.com/fzi-forschungszentrum-informatik/Lanelet2)
-- **OpenStreetMap (OSM)**: For generating Lanelet2 maps. [OpenStreetMap](https://www.openstreetmap.org/)
+- **Lanelet2**: For map handling and routing
+- **OpenStreetMap (OSM)**: For generating Lanelet2 maps
+- **ROS2 Humble**: Robotics middleware
+- **CycloneDDS**: Fast and robust DDS implementation
 
 Developed for internal use at Hochschule Schmalkalden for R&D, teaching, and research purposes.
 
 ## Support
 
 For additional help:
-1. Contact the development team (abhishek.nannuri@outlook.com)
+- Contact the development team: abhishek.nannuri@outlook.com
