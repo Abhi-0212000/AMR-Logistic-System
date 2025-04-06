@@ -1,0 +1,86 @@
+name: RPS2 CI
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+jobs:
+  build_and_test:
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Setup workspace
+      shell: bash
+      run: |
+        source /opt/ros/humble/setup.bash
+        mkdir -p ~/ros_ws/src
+        cp -r $GITHUB_WORKSPACE ~/ros_ws/src/rps2-project
+        
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ~/ros_ws
+        apt-get update
+        apt-get install -y python3-pip flake8
+        rosdep update
+        rosdep install --from-paths src --ignore-src -r -y
+        
+        # Install linting tools
+        pip3 install black flake8 pylint
+        
+    - name: Build
+      shell: bash
+      run: |
+        cd ~/ros_ws
+        source /opt/ros/humble/setup.bash
+        colcon build
+        
+    - name: Linting and format check
+      shell: bash
+      run: |
+        cd ~/ros_ws
+        source /opt/ros/humble/setup.bash
+        source install/setup.bash
+        
+        # Create logs directory
+        mkdir -p ~/ros_ws/src/rps2-project/lint_logs
+        cd ~/ros_ws/src/rps2-project
+        
+        # Python linting
+        echo "Running Python linting checks..."
+        flake8 . > lint_logs/flake8.log 2>&1 || true
+        black --check . > lint_logs/black.log 2>&1 || true
+        
+        # C++ linting using ament tools
+        echo "Running C++ linting checks..."
+        cd ~/ros_ws
+        ament_clang_format --xunit-file ~/ros_ws/src/rps2-project/lint_logs/clang_format.xml src/rps2-project || true
+        
+    - name: Run tests
+      shell: bash
+      run: |
+        cd ~/ros_ws
+        source /opt/ros/humble/setup.bash
+        source install/setup.bash
+        
+        # Run tests
+        colcon test --event-handlers console_cohesion+
+        colcon test-result --all --verbose
+        
+    - name: Upload lint logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-logs
+        path: ~/ros_ws/src/rps2-project/lint_logs/
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: ~/ros_ws/build/*/test_results
