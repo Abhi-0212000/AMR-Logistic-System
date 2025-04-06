@@ -28,12 +28,6 @@ ament_export_dependencies(rosidl_default_runtime)
 # If tests are being run, find and include the testing dependencies
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-
-  # The following lines allow you to bypass lint checks temporarily
-  # You can enable them when your project is ready for final checks
-  set(ament_cmake_copyright_FOUND TRUE)
-  set(ament_cmake_cpplint_FOUND TRUE)
-
   ament_lint_auto_find_test_dependencies()
 endif()
 
