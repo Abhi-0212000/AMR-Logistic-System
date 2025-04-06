@@ -4,20 +4,19 @@ This package provides autonomous global path planning functionalities for mobile
 
 ## Table of Contents
 1. [Features](#features)
-2. [Directory Structure](#directory-structure)
-3. [Installation & Build Instructions](#installation--build-instructions)
-4. [Usage](#usage)
+2. [Installation & Build Instructions](#installation--build-instructions)
+3. [Usage](#usage)
     - [Server Node](#server-node)
     - [Client Node](#client-node)
-5. [System Architecture Overview](#system-architecture-overview)
-6. [Key Components Explained](#key-components-explained)
+4. [System Architecture Overview](#system-architecture-overview)
+5. [Key Components Explained](#key-components-explained)
     - [Global Path Planner (Server Node)](#1-global-path-planner)
     - [Parameters System](#2-parameters-system)
-7. [Debugging Guide](#debugging-guide)
-8. [Best Practices](#best-practices)
-9. [Contributing](#contributing)
-10. [License](#license)
-11. [Support](#support)
+6. [Debugging Guide](#debugging-guide)
+7. [Best Practices](#best-practices)
+8. [Contributing](#contributing)
+9. [License](#license)
+10. [Support](#support)
 
 
 ## Features
@@ -26,37 +25,6 @@ This package provides autonomous global path planning functionalities for mobile
 - **Reusable Logger**: Custom logger based on spdlog supporting `.json`, `/.log` formats
 - **Example Client Node**: Demonstrates communication with the global path planner
 
-
-## Directory Structure
-
-```
-amr_navigation_system
-├── config
-│   ├── client_params.yaml
-│   └── global_path_planner_params.yaml
-├── include/amr_navigation_system
-│   ├── global_path_plan_client
-│   └── global_path_plan_server
-│       ├── amr_traffic_rules.hpp
-│       ├── graph_builder.hpp
-│       └── optimal_path_planner.hpp
-├── laneletMaps                # Folder for storing OSM map files
-├── src
-│   ├── global_path_plan_client
-│   │   └── global_path_planner_client.cpp  # Example client node
-│   └── global_path_plan_server
-│       ├── amr_traffic_rules.cpp
-│       ├── graph_builder.cpp
-│       ├── optimal_path_planner.cpp
-│       └── global_path_planner.cpp         # Main server node
-├── utils
-│   └── common_utils.hpp       # Utility functions/structs shared across the package
-│   └── logger.hpp             # Reusable logger component (see logger.md for details)
-│   └── logger.md              # This README file for reusing the logger code in other packages
-├── CMakeLists.txt
-├── package.xml
-└── amr_navigation_system.md   # This README file
-```
 
 ## Installation & Build Instructions
 
@@ -152,7 +120,7 @@ Please look at the parameter files  `amr_navigation_system/config/global_path_pl
    - **Check**:
      - Are start/end points within bounds? (bounds are defined in global_path_planner_params.yaml)
      - Is the map properly formatted?
-     - Check log files for detailed error messages. Logs are stored in `~/.local/share/AMR/logs`
+     - Check log files for detailed error messages. Logs are stored in `~/ros2_ws/src/AMR-LOGISTIC-SYSTEM/AMR/logs`
 
 3. **Parameter Issues**
    - **Symptom**: Unexpected behavior or crashes
@@ -198,7 +166,7 @@ Log files contain:
    ```
 
 2. **Log File Location**:
-   - Default: `~/.local/share/AMR/logs`
+   - Default: `~/ros2_ws/src/AMR-LOGISTIC-SYSTEM/AMR/logs`
    - Format: JSON or plain text (configurable)
 
 ### Troubleshooting Steps
@@ -238,6 +206,6 @@ Log files contain:
 ## Support
 
 For additional help:
-1. Check the detailed logs in `~/.local/share/AMR/logs`
+1. Check the detailed logs in `~/ros2_ws/src/AMR-LOGISTIC-SYSTEM/AMR/logs`
 2. Review the configuration in YAML files
 3. Contact the development team (abhishek.nannuri@outlook.com)
