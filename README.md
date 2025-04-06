@@ -8,7 +8,7 @@ The AMR-Logistic-System now uses a containerized approach with Docker, making de
 
 ## System Requirements
 
-- Ubuntu Linux (recommended: 20.04 or 22.04)
+- Ubuntu Linux (recommended: 22.04)
 - ROS2 Humble - Install following the [official guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
 - Docker and Docker Compose
 - Sufficient disk space (~3GB for Docker images and containers)
