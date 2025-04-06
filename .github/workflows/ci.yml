@@ -1,4 +1,4 @@
-name: RPS2 CI
+name: ROS2 CI
 on:
   push:
     branches: [ main, develop ]
@@ -17,8 +17,8 @@ jobs:
       shell: bash
       run: |
         source /opt/ros/humble/setup.bash
-        mkdir -p ~/ros_ws/src
-        cp -r $GITHUB_WORKSPACE ~/ros_ws/src/rps2-project
+        mkdir -p ~/ros2_ws/src
+        cp -r $GITHUB_WORKSPACE ~/ros2_ws/src
         
     - name: Install dependencies
       shell: bash
@@ -35,20 +35,20 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cd ~/ros_ws
+        cd ~/ros2_ws
         source /opt/ros/humble/setup.bash
         colcon build
         
     - name: Linting and format check
       shell: bash
       run: |
-        cd ~/ros_ws
+        cd ~/ros2_ws
         source /opt/ros/humble/setup.bash
         source install/setup.bash
         
         # Create logs directory
-        mkdir -p ~/ros_ws/src/rps2-project/lint_logs
-        cd ~/ros_ws/src/rps2-project
+        mkdir -p ~/ros2_ws/src/lint_logs
+        cd ~/ros2_ws/src
         
         # Python linting
         echo "Running Python linting checks..."
@@ -58,7 +58,7 @@ jobs:
         # C++ linting using ament tools
         echo "Running C++ linting checks..."
         cd ~/ros_ws
-        ament_clang_format --xunit-file ~/ros_ws/src/rps2-project/lint_logs/clang_format.xml src/rps2-project || true
+        ament_clang_format --xunit-file ~/ros2_ws/src/lint_logs/clang_format.xml src/rps2-project || true
         
     - name: Run tests
       shell: bash
@@ -76,11 +76,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: lint-logs
-        path: ~/ros_ws/src/rps2-project/lint_logs/
+        path: ~/ros2_ws/src/lint_logs/
         
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: test-results
-        path: ~/ros_ws/build/*/test_results
+        path: ~/ros2_ws/build/*/test_results

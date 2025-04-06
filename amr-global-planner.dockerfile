@@ -20,7 +20,6 @@ RUN apt-get update \
         build-essential \
         cmake \
         ros-humble-rmw-cyclonedds-cpp \
-        ros-humble-demo-nodes-py \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep if not already done
