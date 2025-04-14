@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #pragma once
+
 #include <stdexcept>
 #include <string>
 #include <utility>
+
 #include <GeographicLib/UTMUPS.hpp>
 
 namespace amr_local_planner
@@ -33,30 +35,34 @@ struct GPSPoint
 
   // Constructor with individual parameters
   GPSPoint(double lat, double lon, double alt = 0.0)
-  : latitude(lat), longitude(lon), altitude(alt) {}
+  : latitude(lat), longitude(lon), altitude(alt)
+  {
+  }
 };
 
 // Data structure for UTM points
 struct UTMPoint
 {
-  double x;        // Easting (meters)
-  double y;        // Northing (meters)
-  int zone;        // UTM zone number
-  bool northp;     // Hemisphere: true for Northern, false for Southern
+  double x;     // Easting (meters)
+  double y;     // Northing (meters)
+  int zone;     // UTM zone number
+  bool northp;  // Hemisphere: true for Northern, false for Southern
 
   // Default constructor
   UTMPoint() = default;
 
   // Constructor with parameters
   UTMPoint(double easting, double northing, int utm_zone, bool is_north = true)
-  : x(easting), y(northing), zone(utm_zone), northp(is_north) {}
+  : x(easting), y(northing), zone(utm_zone), northp(is_north)
+  {
+  }
 };
 
 // Data structure for local points (relative to origin)
 struct LocalPoint
 {
-  double x;    // Local x position (relative to origin)
-  double y;    // Local y position (relative to origin)
+  double x;  // Local x position (relative to origin)
+  double y;  // Local y position (relative to origin)
 
   // Default constructor
   LocalPoint() = default;
@@ -84,12 +90,11 @@ public:
               utm_x and utm_y: Assigned the calculated easting and northing UTM coordinates, respectively.
       */
       GeographicLib::UTMUPS::Forward(
-        origin.latitude,
-        origin.longitude,
-        origin_utm_.zone,                 // UTM zone derived from origin coordinates
-        origin_utm_.northp,               // Hemisphere derived from origin coordinates
-        origin_utm_.x,                    // Easting in UTM coordinates
-        origin_utm_.y                     // Northing in UTM coordinates
+        origin.latitude, origin.longitude,
+        origin_utm_.zone,    // UTM zone derived from origin coordinates
+        origin_utm_.northp,  // Hemisphere derived from origin coordinates
+        origin_utm_.x,       // Easting in UTM coordinates
+        origin_utm_.y        // Northing in UTM coordinates
       );
     } catch (const GeographicLib::GeographicErr & e) {
       throw std::runtime_error("Error initializing UTM origin: " + std::string(e.what()));
@@ -105,14 +110,7 @@ public:
 
     try {
       // Convert GPS to UTM coordinates
-      GeographicLib::UTMUPS::Forward(
-        gps.latitude,
-        gps.longitude,
-        zone,
-        northp,
-        utm_x,
-        utm_y
-      );
+      GeographicLib::UTMUPS::Forward(gps.latitude, gps.longitude, zone, northp, utm_x, utm_y);
     } catch (const GeographicLib::GeographicErr & e) {
       throw std::runtime_error("Error in gpsToLocal conversion: " + std::string(e.what()));
     }
@@ -123,30 +121,18 @@ public:
         double transferred_x, transferred_y;
         int transferred_zone;
         GeographicLib::UTMUPS::Transfer(
-          zone,
-          northp,
-          utm_x,
-          utm_y,
-          origin_utm_.zone,
-          origin_utm_.northp,
-          transferred_x,
-          transferred_y,
-          transferred_zone
-        );
+          zone, northp, utm_x, utm_y, origin_utm_.zone, origin_utm_.northp, transferred_x,
+          transferred_y, transferred_zone);
         utm_x = transferred_x;
         utm_y = transferred_y;
       } catch (const GeographicLib::GeographicErr & e) {
         throw std::runtime_error(
-                "Error in zone transfer during gpsToLocal: " + std::string(
-                  e.what()));
+                "Error in zone transfer during gpsToLocal: " + std::string(e.what()));
       }
     }
 
     // Calculate local position relative to the origin
-    return LocalPoint{
-      utm_x - origin_utm_.x,
-      utm_y - origin_utm_.y
-    };
+    return LocalPoint{utm_x - origin_utm_.x, utm_y - origin_utm_.y};
   }
 
   // Convert local coordinates back to GPS
@@ -160,22 +146,16 @@ public:
     try {
       // Convert UTM coordinates back to GPS
       GeographicLib::UTMUPS::Reverse(
-        origin_utm_.zone,
-        origin_utm_.northp,
-        utm_x,
-        utm_y,
-        gps.latitude,
-        gps.longitude
-      );
+        origin_utm_.zone, origin_utm_.northp, utm_x, utm_y, gps.latitude, gps.longitude);
     } catch (const GeographicLib::GeographicErr & e) {
       throw std::runtime_error("Error in localToGPS conversion: " + std::string(e.what()));
     }
-    gps.altitude = 0.0;      // Default altitude
+    gps.altitude = 0.0;  // Default altitude
     return gps;
   }
 
 private:
-  UTMPoint origin_utm_;    // Stores UTM equivalent of GPS origin for future transformations
+  UTMPoint origin_utm_;  // Stores UTM equivalent of GPS origin for future transformations
 };
 
-}   // namespace amr_local_planner
+}  // namespace amr_local_planner

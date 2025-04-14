@@ -58,8 +58,9 @@ jobs:
         # C++ linting using ament tools
         echo "Running C++ linting checks..."
         cd ~/ros2_ws
-        ament_clang_format --xunit-file ~/ros2_ws/src/lint_logs/clang_format.xml src || true
-        
+        ament_uncrustify --xunit-file ~/ros2_ws/src/lint_logs/uncrustify_format.xml src || true
+        ament_cpplint --xunit-file ~/ros2_ws/src/lint_logs/cpplint_format.xml src || true
+
     - name: Run tests
       shell: bash
       run: |

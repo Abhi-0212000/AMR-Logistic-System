@@ -1,5 +1,19 @@
-#ifndef GRAPH_BUILDER_HPP
-#define GRAPH_BUILDER_HPP
+// Copyright 2025 Abhishek Nannuri
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__GRAPH_BUILDER_HPP_
+#define AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__GRAPH_BUILDER_HPP_
 
 #include <lanelet2_io/Io.h>
 #include <lanelet2_projection/UTM.h>
@@ -7,6 +21,7 @@
 
 #include <filesystem>  // For extracting the map name
 #include <string>
+#include <memory>
 
 #include "amr_navigation_system/global_path_plan_server/amr_traffic_rules.hpp"  // Custom traffic rules for AMR
 #include "amr_navigation_system/utils/common_utils.hpp"  // Include the GPSPoint struct for map origin
@@ -23,7 +38,7 @@ class GraphBuilder
 {
 public:
   // Constructor and Destructor
-  GraphBuilder(std::shared_ptr<amr_logging::NodeLogger> logger);
+  explicit GraphBuilder(std::shared_ptr<amr_logging::NodeLogger> logger);
   ~GraphBuilder() = default;
 
   /**
@@ -69,4 +84,4 @@ private:
 
 }  // namespace amr_navigation
 
-#endif  // GRAPH_BUILDER_HPP
+#endif  // AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__GRAPH_BUILDER_HPP_

@@ -1,3 +1,17 @@
+// Copyright 2025 Abhishek Nannuri
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "amr_navigation_system/global_path_plan_server/amr_traffic_rules.hpp"
 
 #include <boost/optional.hpp>  // Include for boost::optional (used in Lanelet2)
@@ -9,8 +23,10 @@ namespace lanelet
 namespace traffic_rules
 {
 
-// Constructor: Initializes AmrTrafficRules by calling the base class constructor with default configuration
-AmrTrafficRules::AmrTrafficRules() : TrafficRules(Configuration()) {}
+// Constructor: Initializes AmrTrafficRules by calling the base class constructor
+// with default configuration
+AmrTrafficRules::AmrTrafficRules()
+: TrafficRules(Configuration()) {}
 
 // canPass function for Lanelet objects
 // This checks if a lanelet has an attribute "amr_navigable" set to "yes"
@@ -30,8 +46,10 @@ bool AmrTrafficRules::canPass(const lanelet::ConstArea & area) const
 }
 
 // canPass function for two Lanelets
-// Checks if both 'from' and 'to' lanelets are navigable by calling the single lanelet canPass function.
-// Special case: If the 'from' and 'to' lanelets are identical (including one being inverted), this function allows passing.
+// Checks if both 'from' and 'to' lanelets are navigable by calling the single
+// lanelet canPass function.
+// Special case: If the 'from' and 'to' lanelets are identical (including one
+// being inverted), this function allows passing.
 bool AmrTrafficRules::canPass(
   const lanelet::ConstLanelet & from, const lanelet::ConstLanelet & to) const
 {
@@ -65,7 +83,8 @@ bool AmrTrafficRules::canPass(const lanelet::ConstArea & from, const lanelet::Co
 }
 
 // canChangeLane function
-// This function returns false for all cases, indicating that AMRs (Autonomous Mobile Robots) do not change lanes.
+// This function returns false for all cases, indicating that AMRs
+// (Autonomous Mobile Robots) do not change lanes.
 bool AmrTrafficRules::canChangeLane(
   const lanelet::ConstLanelet & /*from*/, const lanelet::ConstLanelet & /*to*/) const
 {
@@ -90,7 +109,7 @@ bool AmrTrafficRules::isOneWay(const lanelet::ConstLanelet & lanelet) const
 SpeedLimitInformation AmrTrafficRules::speedLimit(
   [[maybe_unused]] const lanelet::ConstLanelet & lanelet) const
 {
-  using namespace lanelet::units::literals;
+  using lanelet::units::literals::operator""_kmh;
   Velocity speed = 30.0_kmh;  // Define speed limit for lanelets
 
   return SpeedLimitInformation{speed, true};  // true for mandatory speed limit
@@ -102,7 +121,7 @@ SpeedLimitInformation AmrTrafficRules::speedLimit(
 SpeedLimitInformation AmrTrafficRules::speedLimit(
   [[maybe_unused]] const lanelet::ConstArea & area) const
 {
-  using namespace lanelet::units::literals;
+  using lanelet::units::literals::operator""_kmh;
   Velocity speed = 30.0_kmh;  // Same speed limit for areas
 
   return SpeedLimitInformation{speed, true};  // true for mandatory speed limit

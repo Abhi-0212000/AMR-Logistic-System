@@ -1,3 +1,17 @@
+// Copyright 2025 Abhishek Nannuri
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /**
  * @file amr_traffic_rules.hpp
  * @brief Defines the AmrTrafficRules class for autonomous mobile robot navigation.
@@ -6,8 +20,8 @@
  * Lanelet2's TrafficRules to implement specific rules for autonomous mobile robots.
  */
 
-#ifndef AMR_TRAFFIC_RULES_HPP
-#define AMR_TRAFFIC_RULES_HPP
+#ifndef AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__AMR_TRAFFIC_RULES_HPP_
+#define AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__AMR_TRAFFIC_RULES_HPP_
 
 #include <lanelet2_core/primitives/Area.h>
 #include <lanelet2_core/primitives/Lanelet.h>
@@ -121,4 +135,4 @@ public:
 }  // namespace traffic_rules
 }  // namespace lanelet
 
-#endif  // AMR_TRAFFIC_RULES_HPP
+#endif  // AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__AMR_TRAFFIC_RULES_HPP_

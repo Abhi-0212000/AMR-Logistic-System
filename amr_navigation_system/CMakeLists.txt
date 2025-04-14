@@ -41,17 +41,17 @@ add_executable(global_path_planner
     # Add other source files here as needed
 )
 
-ament_target_dependencies(global_path_planner 
-  rclcpp 
+ament_target_dependencies(global_path_planner
+  rclcpp
   spdlog
   fmt
   amr_interfaces  # This links the service interface dependency
-  lanelet2_core 
+  lanelet2_core
   lanelet2_projection
   lanelet2_io
   lanelet2_routing
   lanelet2_traffic_rules
-  nlohmann_json  
+  nlohmann_json
 )
 target_link_libraries(global_path_planner fmt)
 
@@ -60,14 +60,14 @@ add_executable(global_path_planner_client
     src/utils/logger.cpp
 )
 
-ament_target_dependencies(global_path_planner_client 
-  rclcpp 
+ament_target_dependencies(global_path_planner_client
+  rclcpp
   spdlog
   fmt
-  nlohmann_json  
+  nlohmann_json
   amr_interfaces  # This links the service interface dependency
 )
-target_link_libraries(global_path_planner_client fmt) 
+target_link_libraries(global_path_planner_client fmt)
 
 install(TARGETS
 
@@ -82,11 +82,11 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
+  # set(ament_cmake_copyright_FOUND TRUE)
   # the following line skips cpplint (only works in a git repo)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
+  # set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 

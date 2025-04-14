@@ -1,3 +1,17 @@
+// Copyright 2025 Abhishek Nannuri
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "amr_interfaces/srv/compute_global_path.hpp"
 #include "amr_navigation_system/global_path_plan_server/graph_builder.hpp"
 #include "amr_navigation_system/global_path_plan_server/optimal_path_finder.hpp"
@@ -10,7 +24,8 @@ class GlobalPathPlanner : public rclcpp::Node
 {
 public:
   // Constructor to initialize the node and service server
-  GlobalPathPlanner() : Node("amr_global_path_planner")
+  GlobalPathPlanner()
+  : Node("amr_global_path_planner")
   {
     // Declare parameters with default values, loaded from the YAML file
     this->declare_parameter<std::string>("paths.map_path", "");
@@ -42,8 +57,8 @@ public:
     // Create the service that provides global path planning
     server_ = this->create_service<amr_interfaces::srv::ComputeGlobalPath>(
       "global_path_planner", std::bind(
-                               &GlobalPathPlanner::callbackComputeGlobalPath, this,
-                               std::placeholders::_1, std::placeholders::_2));
+        &GlobalPathPlanner::callbackComputeGlobalPath, this,
+        std::placeholders::_1, std::placeholders::_2));
 
     // Log information using both RCLCPP and the new logger
     RCLCPP_INFO(this->get_logger(), "Service server has been started.");
@@ -107,7 +122,8 @@ private:
 
       if (
         !amr_navigation::isWithinBounds(startGPSPoint, bbox_) ||
-        !amr_navigation::isWithinBounds(endGPSPoint, bbox_)) {
+        !amr_navigation::isWithinBounds(endGPSPoint, bbox_))
+      {
         logger_->log_error(
           "Start or end point is outside the defined bounds.", __FILE__, __LINE__, __FUNCTION__);
         response->status = 1;
@@ -159,7 +175,6 @@ private:
       logger_->log_info("Path computed successfully.", __FILE__, __LINE__, __FUNCTION__);
       RCLCPP_INFO(
         this->get_logger(), "Path Comupted Successfully and sent the response back to client");
-
     } catch (const std::runtime_error & e) {
       // Handle runtime errors during path planning
       logger_->log_error(
@@ -203,19 +218,19 @@ int main(int argc, char ** argv)
 
   // Load parameters and initialize the node
   auto options = rclcpp::NodeOptions()
-                   .allow_undeclared_parameters(true)
-                   .automatically_declare_parameters_from_overrides(true)
-                   .parameter_overrides(
-                     {{"paths.map_path", "/path/to/default/osm/file.osm"},
-                      {"origins.gps_origin.latitude", 0.0},
-                      {"origins.gps_origin.longitude", 0.0},
-                      {"origins.gps_origin.altitude", 0.0}});
+    .allow_undeclared_parameters(true)
+    .automatically_declare_parameters_from_overrides(true)
+    .parameter_overrides(
+    {{"paths.map_path", "/path/to/default/osm/file.osm"},
+      {"origins.gps_origin.latitude", 0.0},
+      {"origins.gps_origin.longitude", 0.0},
+      {"origins.gps_origin.altitude", 0.0}});
 
   // Create a shared pointer for the GlobalPathPlanner node
   auto node = std::make_shared<GlobalPathPlanner>();
 
   rclcpp::on_shutdown(
-    []() { RCLCPP_INFO(rclcpp::get_logger("main"), "Node is shutting down..."); });
+    []() {RCLCPP_INFO(rclcpp::get_logger("main"), "Node is shutting down...");});
 
   // Spin the node to handle incoming requests
   rclcpp::spin(node);
