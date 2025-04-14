@@ -1,5 +1,19 @@
-#ifndef OPTIMAL_PATH_FINDER_HPP
-#define OPTIMAL_PATH_FINDER_HPP
+// Copyright 2025 Abhishek Nannuri
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__OPTIMAL_PATH_FINDER_HPP_
+#define AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__OPTIMAL_PATH_FINDER_HPP_
 
 // Lanelet2 includes
 #include <lanelet2_core/LaneletMap.h>           // For accessing the map and its layers
@@ -8,6 +22,8 @@
 #include <lanelet2_core/primitives/GPSPoint.h>  // For handling GPS coordinates
 #include <lanelet2_projection/UTM.h>            // For GPS to UTM projection (conversion)
 #include <lanelet2_routing/RoutingGraph.h>      // For routing graph and pathfinding in Lanelet2
+
+#include <memory>
 
 #include <boost/geometry.hpp>
 
@@ -26,7 +42,7 @@ class OptimalPathFinder
 {
 public:
   // Constructor and Destructor
-  OptimalPathFinder(std::shared_ptr<amr_logging::NodeLogger> logger);
+  explicit OptimalPathFinder(std::shared_ptr<amr_logging::NodeLogger> logger);
   ~OptimalPathFinder();
 
   /**
@@ -94,4 +110,4 @@ private:
 
 }  // namespace amr_navigation
 
-#endif  // OPTIMAL_PATH_FINDER_HPP
+#endif  // AMR_NAVIGATION_SYSTEM__GLOBAL_PATH_PLAN_SERVER__OPTIMAL_PATH_FINDER_HPP_
