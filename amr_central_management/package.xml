@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>amr_central_management: It manages the AMR goals, error handling</description>
   <maintainer email="abhishek.nannuri@outlook.com">Abhishek Nannuri</maintainer>
-  <license>Apache License 2.0</license>
+  <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
   <depend>amr_interfaces</depend>
