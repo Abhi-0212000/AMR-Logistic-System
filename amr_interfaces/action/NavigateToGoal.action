@@ -1,0 +1,16 @@
+# Goal
+float64[] goal_gps               # Goal GPS coordinates [latitude, longitude, altitude]
+int64[] lanelet_ids              # Sequence of IDs (Lanelet or Area or Both) forming the Optimal path
+bool[] is_inverted               # Boolean array indicating if the corresponding lanelet is inverted
+float64 total_distance           # Estimated total distance of the path in meters
+float64 estimated_time           # Estimated time to traverse the path in seconds
+---
+# Result
+action_msgs/GoalStatus status    # Standard ROS 2 goal status
+string message                   # Descriptive message about the result
+float64 total_distance           # Actual total distance traveled
+float64 total_time               # Actual total time taken
+---
+# Feedback
+float64 distance_remaining       # Estimated distance remaining to reach goal
+float64 estimated_time_remaining # Estimated time remaining to reach goal

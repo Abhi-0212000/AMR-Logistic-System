@@ -1,0 +1,230 @@
+# AMR Local Planner Parameters
+trajectory_planner:
+  window_manager:
+    planning_time:
+      type: double
+      default_value: 1.0
+      read_only: true
+      description: "Time allocated for planning (seconds)"
+      validation:
+        bounds<>: [0.2, 5.0]  # Min and max bounds
+    buffer_time:
+      type: double
+      default_value: 0.5
+      read_only: true
+      description: "Buffer time for safety (seconds)"
+      validation:
+        bounds<>: [0.1, 2.0]
+    lookahead_points:
+      type: int
+      default_value: 4
+      read_only: true
+      description: "Number of points to look ahead in the path"
+      validation:
+        bounds<>: [2, 20]
+
+  centerline_processor:
+    interpolation_method:
+      type: string
+      default_value: "linear"
+      read_only: true
+      description: "Interpolation method for pre-processing centerline points (linear or bezier)"
+      validation:
+        one_of<>: [["linear", "bezier"]]
+    target_spacing:
+      type: double
+      default_value: 2.0
+      read_only: true
+      description: "Target spacing between processed centerline points (meters)"
+      validation:
+        bounds<>: [0.5, 5.0]
+    spacing_tolerance:
+      type: double
+      default_value: 0.1
+      read_only: true
+      description: "Tolerance for acceptable deviation from target spacing (meters)"
+      validation:
+        bounds<>: [0.01, 0.5]
+    # Below parameters are only relevant if bezier interpolation is used
+    bezier_window_size:
+      type: int
+      default_value: 6
+      read_only: true
+      description: "Number of points in each window for bezier curve fitting"
+      validation:
+        bounds<>: [3, 20]
+    bezier_overlap:
+      type: int
+      default_value: 2
+      read_only: true
+      description: "Number of points to overlap between bezier windows"
+      validation:
+        bounds<>: [1, 10]
+  
+  # Trajectory Optimization Parameters
+  trajectory_optimization:
+    # Basic optimization parameters
+    trajectory_point_count:
+      type: int
+      default_value: 150
+      read_only: true
+      description: "Number of equidistant points to be in optimized trajectory"
+      validation:
+        bounds<>: [50, 500]
+    base_tangent_factor:
+      type: double
+      default_value: 0.5
+      read_only: true
+      description: "Base scaling factor for spline tangent vectors"
+      validation:
+        bounds<>: [0.1, 2.0]
+    optimization_time_limit:
+      type: double
+      default_value: 0.8
+      read_only: true
+      description: "Maximum time allowed for optimization (seconds)"
+      validation:
+        bounds<>: [0.1, 5.0]
+    arc_length_calculation_method:
+      type: string
+      default_value: "linear"
+      read_only: true
+      description: "Method for calculating point spacing along spline (linear: faster but less accurate, simpson: more accurate but computationally intensive)"
+      validation:
+        one_of<>: [["linear", "simpson"]]
+    
+    # Collision checking parameters
+    collision_checking:
+      safety_margin:
+        type: double
+        default_value: 0.2
+        read_only: true
+        description: "Safety margin for collision checking (meters)"
+        validation:
+          bounds<>: [0.05, 1.0]
+      collision_check_interval:
+        type: int
+        default_value: 5
+        read_only: true
+        description: "Stride for collision checking (check every Nth point)"
+        validation:
+          bounds<>: [1, 10]
+
+    # RPROP optimization parameters
+    rprop:
+      initial_step_size:
+        type: double
+        default_value: 0.3
+        read_only: true
+        description: "Initial step size i.e delta_0 for RPROP optimization"
+        validation:
+          bounds<>: [0.01, 1.0]
+      minimum_step_size:
+        type: double
+        default_value: 0.0001 # 1.0e-4
+        read_only: true
+        description: "Minimum step size i.e delta_min for RPROP optimization"
+        validation:
+          bounds<>: [0.000001, 0.01] # 1.0e-6 to 1.0e-2
+      maximum_step_size:
+        type: double
+        default_value: 50.0
+        read_only: true
+        description: "Maximum step size i.e delta_max for RPROP optimization"
+        validation:
+          bounds<>: [1.0, 100.0]
+      increase_factor:
+        type: double
+        default_value: 1.2
+        read_only: true
+        description: "Increase factor i.e eta_plus for RPROP optimization"
+        validation:
+          bounds<>: [1.0, 2.0]
+      decrease_factor:
+        type: double
+        default_value: 0.5
+        read_only: true
+        description: "Decrease factor i.e eta_minus for RPROP optimization"
+        validation:
+          bounds<>: [0.1, 0.9]
+
+  # Distance Map Parameters
+  distance_map:
+    resolution:
+      type: double
+      default_value: 0.2
+      read_only: true
+      description: "Resolution of distance map grid (meters)"
+      validation:
+        bounds<>: [0.05, 0.5]
+    window_size:
+      type: double
+      default_value: 3.0
+      read_only: true
+      description: "Size of local window for distance calculations (meters). Controls the physical dimensions of the area considered for distance mapping."
+      validation:
+        bounds<>: [1.0, 10.0]
+    use_sobel:
+      type: bool
+      default_value: true
+      read_only: true
+      description: "Whether to use Sobel operator for gradient calculation"
+    sobel_threshold:
+      type: double
+      default_value: 0.000001 # 1.0e-6
+      read_only: true
+      description: "Minimum gradient magnitude threshold for normalization. Gradients below this value are considered noise."
+      validation:
+        bounds<>: [0.000000001, 0.001] # 1.0e-9 to 1.0e-3
+
+  # Constraints of the robot that are crucial for generating feasible trajectories.
+  robot_constraints:
+    max_velocity:
+      type: double
+      default_value: 1.5
+      read_only: true
+      description: "Maximum velocity (m/s)"
+      validation:
+        bounds: [0.1, 3.0]
+    max_acceleration:
+      type: double
+      default_value: 1.0
+      read_only: true
+      description: "Maximum acceleration (m/s²)"
+      validation:
+        bounds: [0.1, 2.0]
+    max_deceleration:
+      type: double
+      default_value: 2.0
+      read_only: true
+      description: "Maximum deceleration (m/s²)"
+      validation:
+        bounds: [0.1, 3.0]
+    max_jerk:
+      type: double
+      default_value: 1.0
+      read_only: true
+      description: "Maximum jerk (m/s³)"
+      validation:
+        bounds: [0.1, 5.0]
+    max_lateral_accel:
+      type: double
+      default_value: 0.5
+      read_only: true
+      description: "Maximum lateral acceleration (m/s²)"
+      validation:
+        bounds: [0.1, 1.0]
+    wheel_base:
+      type: double
+      default_value: 0.5
+      read_only: true
+      description: "Wheelbase of the robot (meters)"
+      validation:
+        bounds: [0.1, 2.0]
+    min_turning_radius:
+      type: double
+      default_value: 1.0
+      read_only: true
+      description: "Minimum turning radius (meters)"
+      validation:
+        bounds: [0.5, 5.0]

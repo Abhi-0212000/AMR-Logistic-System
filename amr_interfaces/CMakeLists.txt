@@ -19,7 +19,8 @@ rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "srv/ComputeGlobalPath.srv" # This .srv is not depending on geometry_msgs pkg.
   "msg/LogMessage.msg"
-  DEPENDENCIES geometry_msgs  # Ensure that the generated service can depend on geometry_msgs
+  "action/NavigateToGoal.action"
+  DEPENDENCIES geometry_msgs action_msgs  # Ensure that the generated service can depend on geometry_msgs
 )
 
 # Export the rosidl runtime to allow other packages to use the generated service
