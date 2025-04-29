@@ -1,5 +1,30 @@
 # AMR Local Planner Parameters
 trajectory_planner:
+  map_data:
+      map_path:
+        type: string
+        default_value: "/ros2_ws/src/amr_trajectory_planner/laneletMaps/HS-SchmalkaldenPart1.osm"
+        read_only: true
+        description: "Path to the lanelet2 map file (.osm format)"
+      
+      gps_origin:
+        latitude:
+          type: double
+          default_value: 50.7153508
+          read_only: true
+          description: "Latitude of the GPS origin for map loading"
+        longitude:
+          type: double
+          default_value: 10.4680332
+          read_only: true
+          description: "Longitude of the GPS origin for map loading"
+        altitude:
+          type: double
+          default_value: 0.0
+          read_only: true
+          description: "Altitude of the GPS origin for map loading"
+
+  # Window Manager Parameters
   window_manager:
     planning_time:
       type: double
