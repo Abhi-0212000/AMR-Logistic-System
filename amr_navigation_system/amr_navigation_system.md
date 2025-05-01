@@ -12,11 +12,10 @@ This package provides autonomous global path planning functionalities for mobile
 5. [Key Components Explained](#key-components-explained)
     - [Global Path Planner (Server Node)](#1-global-path-planner)
     - [Parameters System](#2-parameters-system)
-6. [Debugging Guide](#debugging-guide)
-7. [Best Practices](#best-practices)
-8. [Contributing](#contributing)
-9. [License](#license)
-10. [Support](#support)
+6. [Testing](#testing)
+7. [Debugging Guide](#debugging-guide)
+8. [Best Practices](#best-practices)
+9. [Support](#support)
 
 
 ## Features
@@ -84,6 +83,25 @@ Key Functions:
 #### 2. Parameters System
 
 Please look at the parameter files  `amr_navigation_system/config/global_path_planner_params.yaml`, `amr_navigation_system/config/client_params.yaml` for more details.
+
+### Testing
+Run the below cmd in another terminal.
+```sh
+ros2 service call /global_path_planner amr_interfaces/srv/ComputeGlobalPath "{
+  start_latitude: 50.7154014,
+  start_longitude: 10.4683083,
+  start_altitude: 0.0,
+  end_latitude: 50.7154152,
+  end_longitude: 11.0,
+  end_altitude: 0.0,
+  use_time_based_routing: true
+}"
+```
+Output should be:
+```sh
+response:
+amr_interfaces.srv.ComputeGlobalPath_Response(lanelet_ids=[-6778, -6802, -6779, -6782, -6768, -6788, -6793, -6777, -6784, -6776], is_inverted=[False, False, False, False, False, False, False, True, False, False], total_distance=147.2242238312887, estimated_time=9.054729203596866, status=0, message='Optimal path successfully computed.')
+```
 
 ### Debugging Guide
 

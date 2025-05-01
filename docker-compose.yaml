@@ -14,6 +14,6 @@ services:
     volumes:
       - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro # Need this file to enable container and host comms
       - ./amr_navigation_system/config:/ros2_ws/src/amr_navigation_system/config:rw
-      - ./amr_navigation_system/laneletMaps:/ros2_ws/src/amr_navigation_system/laneletMaps:rw
+      - ./laneletMaps:/ros2_ws/src/amr_navigation_system/laneletMaps:rw
       - ./AMR:/ros2_ws/AMR:rw # mounted to view logs.
     command: ros2 run amr_navigation_system global_path_planner --ros-args --params-file /ros2_ws/src/amr_navigation_system/config/global_path_planner_params.yaml
