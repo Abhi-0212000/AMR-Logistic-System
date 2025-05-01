@@ -25,8 +25,20 @@ namespace traffic_rules
 
 // Constructor: Initializes AmrTrafficRules by calling the base class constructor
 // with default configuration
-AmrTrafficRules::AmrTrafficRules()
-: TrafficRules(Configuration()) {}
+AmrTrafficRules::AmrTrafficRules(Configuration config)
+: TrafficRules(config)
+{
+  // Set defaults if not provided
+  Configuration & mutableConfig = const_cast<Configuration &>(configuration());
+
+  if (config.find("participant") == config.end()) {
+    mutableConfig["participant"] = "amr";
+  }
+
+  if (config.find("location") == config.end()) {
+    mutableConfig["location"] = "germany";
+  }
+}
 
 // canPass function for Lanelet objects
 // This checks if a lanelet has an attribute "amr_navigable" set to "yes"
@@ -136,3 +148,9 @@ bool AmrTrafficRules::hasDynamicRules([[maybe_unused]] const lanelet::ConstLanel
 
 }  // namespace traffic_rules
 }  // namespace lanelet
+
+namespace
+{
+lanelet::traffic_rules::RegisterTrafficRules<lanelet::traffic_rules::AmrTrafficRules>
+regAmrTrafficRules("germany", "amr");
+}

@@ -143,7 +143,8 @@ private:
       }
 
       // Initialize custom traffic rules for AMR
-      auto amrTrafficRules = std::make_shared<lanelet::traffic_rules::AmrTrafficRules>();
+      // auto amrTrafficRules = std::make_shared<lanelet::traffic_rules::AmrTrafficRules>();
+      auto amrTrafficRules = lanelet::traffic_rules::TrafficRulesFactory::create("germany", "amr");
 
       // Build the routing graph from the map
       auto routingGraph =

@@ -27,6 +27,7 @@
 #include <lanelet2_core/primitives/Lanelet.h>
 #include <lanelet2_core/utility/Units.h>
 #include <lanelet2_traffic_rules/TrafficRules.h>
+#include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 
 namespace lanelet
 {
@@ -46,7 +47,7 @@ public:
   /**
      * @brief Construct a new AmrTrafficRules object
      */
-  AmrTrafficRules();
+  AmrTrafficRules(Configuration config = Configuration());
 
   /**
      * @brief Check if the AMR can pass through a given lanelet
