@@ -39,7 +39,7 @@ jobs:
         source /opt/ros/humble/setup.bash
         colcon build
         
-    - name: Linting and format check
+    - name: Linting and format check for python
       shell: bash
       run: |
         cd ~/ros2_ws
@@ -47,20 +47,27 @@ jobs:
         source install/setup.bash
         
         # Create logs directory
-        mkdir -p ~/ros2_ws/src/lint_logs
-        cd ~/ros2_ws/src
+        mkdir -p ~/ros2_ws/src/AMR-Logistic-System/lint_logs
+        cd ~/ros2_ws/src/AMR-Logistic-System/
         
         # Python linting
         echo "Running Python linting checks..."
         flake8 . > lint_logs/flake8.log 2>&1 || true
         black . --check --verbose --line-length=99 > lint_logs/black.log 2>&1 || true
-        
+
+    - name: Linting and format check for python
+      shell: bash
+      run: |
+        cd ~/ros2_ws
+        source /opt/ros/humble/setup.bash
+        source install/setup.bash
+
         # C++ linting using ament tools
         echo "Running C++ linting checks..."
         cd ~/ros2_ws
         ament_uncrustify --xunit-file ~/ros2_ws/src/lint_logs/uncrustify_format.xml src || true
         ament_cpplint --xunit-file ~/ros2_ws/src/lint_logs/cpplint_format.xml src || true
-
+  
     - name: Run tests
       shell: bash
       run: |
@@ -77,7 +84,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: lint-logs
-        path: ~/ros2_ws/src/lint_logs/
+        path: ~/ros2_ws/src/AMR-Logistic-System/lint_logs/
         
     - name: Upload test results
       if: always()
