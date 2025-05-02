@@ -80,8 +80,9 @@ jobs:
         colcon test --event-handlers console_cohesion+
         colcon test-result --all --verbose
         
-    - name: Publish Test Results
-      uses: EnricoMi/publish-unit-test-result-action@v1
+    - name: Upload test results
       if: always()
+      uses: actions/upload-artifact@v4
       with:
-        files: build/*/test_results/**/*.xml
+        name: test-results
+        path: ~/ros2_ws/build/*/test_results
