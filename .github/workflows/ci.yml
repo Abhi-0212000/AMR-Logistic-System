@@ -55,7 +55,7 @@ jobs:
         flake8 .
         black . --check --verbose --line-length=99
 
-    - name: Linting and format check for python
+    - name: Linting and format check for cpp
       shell: bash
       run: |
         set -e
