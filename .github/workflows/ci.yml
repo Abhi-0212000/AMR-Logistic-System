@@ -52,12 +52,13 @@ jobs:
         
         # Python linting
         echo "Running Python linting checks..."
-        flake8 . > lint_logs/flake8.log 2>&1 || true
-        black . --check --verbose --line-length=99 > lint_logs/black.log 2>&1 || true
+        flake8 .
+        black . --check --verbose --line-length=99
 
     - name: Linting and format check for python
       shell: bash
       run: |
+        set -e
         cd ~/ros2_ws
         source /opt/ros/humble/setup.bash
         source install/setup.bash
@@ -79,16 +80,8 @@ jobs:
         colcon test --event-handlers console_cohesion+
         colcon test-result --all --verbose
         
-    - name: Upload lint logs
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v1
       if: always()
-      uses: actions/upload-artifact@v4
       with:
-        name: lint-logs
-        path: ~/ros2_ws/src/AMR-Logistic-System/lint_logs/
-        
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: ~/ros2_ws/build/*/test_results
+        files: build/*/*test.xml
