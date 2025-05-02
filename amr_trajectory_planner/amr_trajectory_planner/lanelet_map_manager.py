@@ -8,7 +8,8 @@ import lanelet2
 from lanelet2.projection import UtmProjector
 from lanelet2.io import load as load_lanelet, Origin
 from lanelet2.routing import RoutingGraph
-from amr_trajectory_planner.amr_traffic_rules import AmrTrafficRules, create_amr_traffic_rules
+# from amr_trajectory_planner.amr_traffic_rules import AmrTrafficRules, create_amr_traffic_rules
+from amr_trajectory_planner.load_amr_traffic_rules import get_amr_traffic_rules
 
 
 class LaneletMapManager:
@@ -40,7 +41,7 @@ class LaneletMapManager:
         
         try:
             # Create our custom traffic rules directly
-            self.traffic_rules = AmrTrafficRules()
+            self.traffic_rules = get_amr_traffic_rules()
             
             # Build routing graph with our custom rules
             self.routing_graph = RoutingGraph(self.map, self.traffic_rules)

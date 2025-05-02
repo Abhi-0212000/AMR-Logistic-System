@@ -31,9 +31,13 @@ RUN apt-get update && \
     rosdep install --from-paths src --ignore-src -r -y && \
     rm -rf /var/lib/apt/lists/*
 
-# Build ROS2 packages
-RUN /bin/bash -c '. /opt/ros/humble/setup.bash && colcon build --packages-select amr_interfaces amr_navigation_system'
+# Build all packages
+RUN . /opt/ros/humble/setup.bash \
+    && colcon build --symlink-install
+
+# Source ROS and workspace by default
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
+    && echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
 
 # Set the entrypoint directly in the Dockerfile
-ENTRYPOINT ["bash", "-c", "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && exec \"$@\"", "--"]
-
+ENTRYPOINT ["/bin/bash", "-c"]

@@ -32,7 +32,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            f"amr_trajectory_planner_node = {package_name}.amr_trajectory_planner_node:main"
+            f"amr_trajectory_planner_node = {package_name}.amr_trajectory_planner_node:main",
+            f"amr_trajectory_planner_test = {package_name}.amr_traffic_rules:main",
         ],
     },
 )

@@ -69,13 +69,31 @@ ament_target_dependencies(global_path_planner_client
 )
 target_link_libraries(global_path_planner_client fmt)
 
-install(TARGETS
+# Create a separate library for AMR traffic rules
+add_library(amr_traffic_rules SHARED
+    src/global_path_plan_server/amr_traffic_rules.cpp
+)
 
+ament_target_dependencies(amr_traffic_rules
+  lanelet2_core
+  lanelet2_traffic_rules
+)
+
+# Install the library
+install(TARGETS
   global_path_planner
   global_path_planner_client
-
+  amr_traffic_rules  # Add this line
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# install(TARGETS
+
+#   global_path_planner
+#   global_path_planner_client
+
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 
 if(BUILD_TESTING)
