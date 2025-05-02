@@ -104,9 +104,7 @@ def emergency_stop_robot(node: Node, num_attempts: int = 3) -> bool:
         stop_cmd = Twist()
         for i in range(num_attempts):
             node.cmd_vel_pub.publish(stop_cmd)
-            node.get_logger().warn(
-                f"Emergency stop command sent (attempt {i+1}/{num_attempts})"
-            )
+            node.get_logger().warn(f"Emergency stop command sent (attempt {i+1}/{num_attempts})")
         return True
     except Exception as e:
         node.get_logger().error(f"Failed to send emergency stop command: {str(e)}")

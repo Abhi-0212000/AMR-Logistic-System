@@ -72,9 +72,7 @@ class CentralManagementNode(Node):
         self._setup_communication_interfaces()
 
         # Start periodic state checking
-        self.create_timer(
-            1.0, self._check_system_health, callback_group=self._topic_group
-        )
+        self.create_timer(1.0, self._check_system_health, callback_group=self._topic_group)
 
         self.get_logger().info("Central Management Node initialized successfully")
 
@@ -96,13 +94,9 @@ class CentralManagementNode(Node):
                 self.get_parameter("origins.gps_origin.longitude").value,
                 self.get_parameter("origins.gps_origin.altitude").value,
             )
-            self._use_time_based_routing = self.get_parameter(
-                "use_time_based_routing"
-            ).value
+            self._use_time_based_routing = self.get_parameter("use_time_based_routing").value
 
-            self.get_logger().info(
-                f"Parameters loaded successfully: {self._reference_gps}"
-            )
+            self.get_logger().info(f"Parameters loaded successfully: {self._reference_gps}")
         except Exception as e:
             self.get_logger().error(f"Failed to load parameters: {str(e)}")
             raise
@@ -112,9 +106,7 @@ class CentralManagementNode(Node):
         try:
             self._coord_transform = CoordinateTransforms(self._reference_gps)
         except Exception as e:
-            self.get_logger().error(
-                f"Failed to initialize coordinate transform: {str(e)}"
-            )
+            self.get_logger().error(f"Failed to initialize coordinate transform: {str(e)}")
             raise
 
     def _setup_communication_interfaces(self) -> None:
@@ -201,9 +193,7 @@ class CentralManagementNode(Node):
             )
 
         if not self._is_pose_valid():
-            return create_error_response(
-                ErrorType.POSE_ERROR, "Robot pose data invalid or stale"
-            )
+            return create_error_response(ErrorType.POSE_ERROR, "Robot pose data invalid or stale")
 
         try:
             self._robot_state = RobotState.PLANNING
@@ -217,9 +207,7 @@ class CentralManagementNode(Node):
                     f"Path planning failed: {path_response.message}",
                 )
 
-            self.get_logger().info(
-                "Path planning successful. Sending goal to Local Planner..."
-            )
+            self.get_logger().info("Path planning successful. Sending goal to Local Planner...")
 
             # Send navigation goal
             goal_accepted = await self._send_navigation_goal(path_response, request)
@@ -293,9 +281,7 @@ class CentralManagementNode(Node):
             send_goal_future = self._navigate_action_client.send_goal_async(
                 goal_msg, feedback_callback=self._navigation_feedback_callback
             )
-            self.get_logger().info(
-                "Goal sent and waiting for acceptance confirmation..."
-            )
+            self.get_logger().info("Goal sent and waiting for acceptance confirmation...")
             goal_handle = await send_goal_future
 
             if not goal_handle.accepted:
@@ -305,9 +291,7 @@ class CentralManagementNode(Node):
 
             self._current_goal_handle = goal_handle
 
-            goal_handle.get_result_async().add_done_callback(
-                self._navigation_result_callback
-            )
+            goal_handle.get_result_async().add_done_callback(self._navigation_result_callback)
             self.get_logger().info(
                 "Add done callback is called aysnchronously and Waiting for navigation result..."
             )

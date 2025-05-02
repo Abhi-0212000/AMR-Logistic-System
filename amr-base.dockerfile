@@ -4,9 +4,11 @@ FROM ros:humble
 # Set non-interactive installation mode
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY ./amr_interfaces /ros2_ws/src/amr_interfaces
-COPY ./amr_navigation_system /ros2_ws/src/amr_navigation_system
-# COPY . /ros2_ws/src/AMR-Logistic-System
+SHELL ["/bin/bash", "-c"]
+
+# COPY ./amr_interfaces /ros2_ws/src/amr_interfaces
+# COPY ./amr_navigation_system /ros2_ws/src/amr_navigation_system
+COPY ./ /ros2_ws/src/
 
 WORKDIR /ros2_ws
 
@@ -35,9 +37,5 @@ RUN apt-get update && \
 RUN . /opt/ros/humble/setup.bash \
     && colcon build --symlink-install
 
-# Source ROS and workspace by default
-RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
-    && echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
-
 # Set the entrypoint directly in the Dockerfile
-ENTRYPOINT ["/bin/bash", "-c"]
+ENTRYPOINT ["bash", "-c", "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && exec \"$@\"", "--"]

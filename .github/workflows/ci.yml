@@ -53,7 +53,7 @@ jobs:
         # Python linting
         echo "Running Python linting checks..."
         flake8 . > lint_logs/flake8.log 2>&1 || true
-        black --check . > lint_logs/black.log 2>&1 || true
+        black . --check --verbose --line-length=99 > lint_logs/black.log 2>&1 || true
         
         # C++ linting using ament tools
         echo "Running C++ linting checks..."

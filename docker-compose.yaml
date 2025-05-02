@@ -1,12 +1,14 @@
+version: '0'
+
 services:
   amr_global_planner:
+    build:
+      context: .
+      dockerfile: amr-base.dockerfile
     image: amr-services:latest
     container_name: amr_global_planner
     ipc: host
     network_mode: host
-    build:
-      context: .
-      dockerfile: amr-base.dockerfile
     environment:
       - ROS_DOMAIN_ID
       - RMW_IMPLEMENTATION
@@ -19,11 +21,12 @@ services:
     command: ros2 run amr_navigation_system global_path_planner --ros-args --params-file /ros2_ws/src/amr_navigation_system/config/global_path_planner_params.yaml
 
   amr_local_planner:
-    image: amr-services:latest  # Using the same image!
+    # Using the same image that's built by amr_global_planner
+    image: amr-services:latest
     container_name: amr_local_planner
     ipc: host
     network_mode: host
-    depends_on:  # Docker will start amr_global_planner before starting amr_local_planner. It does not mean the containers share resources or that one depends on the other at runtime
+    depends_on:  # Docker will start amr_global_planner before starting amr_local_planner
       - amr_global_planner
     environment:
       - ROS_DOMAIN_ID
@@ -33,4 +36,4 @@ services:
       - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro
       - ./laneletMaps:/ros2_ws/laneletMaps:ro
       - ./AMR:/ros2_ws/AMR:rw
-    command: "source /ros2_ws/install/setup.bash && python3 -m amr_local_planner_python.local_planner_node"
+    command: ["/bin/bash", "-c", "source /ros2_ws/install/setup.bash && python3 -m amr_local_planner_python.local_planner_node"]

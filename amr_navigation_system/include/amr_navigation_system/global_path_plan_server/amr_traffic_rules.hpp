@@ -47,7 +47,7 @@ public:
   /**
      * @brief Construct a new AmrTrafficRules object
      */
-  AmrTrafficRules(Configuration config = Configuration());
+  explicit AmrTrafficRules(Configuration config = Configuration());
 
   /**
      * @brief Check if the AMR can pass through a given lanelet
