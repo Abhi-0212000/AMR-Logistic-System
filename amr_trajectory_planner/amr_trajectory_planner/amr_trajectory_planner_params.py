@@ -19,6 +19,18 @@ class trajectory_planner:
         # for detecting if the parameter struct has been updated
         stamp_ = Time()
 
+        class __MapData:
+            map_path = "/ros2_ws/src/amr_trajectory_planner/laneletMaps/HS-SchmalkaldenPart1.osm"
+
+            class __GpsOrigin:
+                latitude = 50.7153508
+                longitude = 10.4680332
+                altitude = 0.0
+
+            gps_origin = __GpsOrigin()
+
+        map_data = __MapData()
+
         class __WindowManager:
             planning_time = 1.0
             buffer_time = 0.5
@@ -138,6 +150,30 @@ class trajectory_planner:
             updated_params = self.get_params()
 
             for param in parameters:
+                if param.name == self.prefix_ + "map_data.map_path":
+                    updated_params.map_data.map_path = param.value
+                    self.logger_.debug(
+                        param.name + ": " + param.type_.name + " = " + str(param.value)
+                    )
+
+                if param.name == self.prefix_ + "map_data.gps_origin.latitude":
+                    updated_params.map_data.gps_origin.latitude = param.value
+                    self.logger_.debug(
+                        param.name + ": " + param.type_.name + " = " + str(param.value)
+                    )
+
+                if param.name == self.prefix_ + "map_data.gps_origin.longitude":
+                    updated_params.map_data.gps_origin.longitude = param.value
+                    self.logger_.debug(
+                        param.name + ": " + param.type_.name + " = " + str(param.value)
+                    )
+
+                if param.name == self.prefix_ + "map_data.gps_origin.altitude":
+                    updated_params.map_data.gps_origin.altitude = param.value
+                    self.logger_.debug(
+                        param.name + ": " + param.type_.name + " = " + str(param.value)
+                    )
+
                 if param.name == self.prefix_ + "window_manager.planning_time":
                     validation_result = ParameterValidators.bounds(param, 0.2, 5.0)
                     if validation_result:
@@ -431,6 +467,42 @@ class trajectory_planner:
         def declare_params(self):
             updated_params = self.get_params()
             # declare all parameters and give default values to non-required ones
+            if not self.node_.has_parameter(self.prefix_ + "map_data.map_path"):
+                descriptor = ParameterDescriptor(
+                    description="Path to the lanelet2 map file (.osm format)", read_only=True
+                )
+                parameter = updated_params.map_data.map_path
+                self.node_.declare_parameter(
+                    self.prefix_ + "map_data.map_path", parameter, descriptor
+                )
+
+            if not self.node_.has_parameter(self.prefix_ + "map_data.gps_origin.latitude"):
+                descriptor = ParameterDescriptor(
+                    description="Latitude of the GPS origin for map loading", read_only=True
+                )
+                parameter = updated_params.map_data.gps_origin.latitude
+                self.node_.declare_parameter(
+                    self.prefix_ + "map_data.gps_origin.latitude", parameter, descriptor
+                )
+
+            if not self.node_.has_parameter(self.prefix_ + "map_data.gps_origin.longitude"):
+                descriptor = ParameterDescriptor(
+                    description="Longitude of the GPS origin for map loading", read_only=True
+                )
+                parameter = updated_params.map_data.gps_origin.longitude
+                self.node_.declare_parameter(
+                    self.prefix_ + "map_data.gps_origin.longitude", parameter, descriptor
+                )
+
+            if not self.node_.has_parameter(self.prefix_ + "map_data.gps_origin.altitude"):
+                descriptor = ParameterDescriptor(
+                    description="Altitude of the GPS origin for map loading", read_only=True
+                )
+                parameter = updated_params.map_data.gps_origin.altitude
+                self.node_.declare_parameter(
+                    self.prefix_ + "map_data.gps_origin.altitude", parameter, descriptor
+                )
+
             if not self.node_.has_parameter(self.prefix_ + "window_manager.planning_time"):
                 descriptor = ParameterDescriptor(
                     description="Time allocated for planning (seconds)", read_only=True
@@ -457,17 +529,14 @@ class trajectory_planner:
 
             if not self.node_.has_parameter(self.prefix_ + "window_manager.lookahead_points"):
                 descriptor = ParameterDescriptor(
-                    description="Number of points to look ahead in the path",
-                    read_only=True,
+                    description="Number of points to look ahead in the path", read_only=True
                 )
                 descriptor.integer_range.append(IntegerRange())
                 descriptor.integer_range[-1].from_value = 2
                 descriptor.integer_range[-1].to_value = 20
                 parameter = updated_params.window_manager.lookahead_points
                 self.node_.declare_parameter(
-                    self.prefix_ + "window_manager.lookahead_points",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "window_manager.lookahead_points", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(
@@ -494,9 +563,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 5.0
                 parameter = updated_params.centerline_processor.target_spacing
                 self.node_.declare_parameter(
-                    self.prefix_ + "centerline_processor.target_spacing",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "centerline_processor.target_spacing", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(
@@ -511,9 +578,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 0.5
                 parameter = updated_params.centerline_processor.spacing_tolerance
                 self.node_.declare_parameter(
-                    self.prefix_ + "centerline_processor.spacing_tolerance",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "centerline_processor.spacing_tolerance", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(
@@ -528,9 +593,7 @@ class trajectory_planner:
                 descriptor.integer_range[-1].to_value = 20
                 parameter = updated_params.centerline_processor.bezier_window_size
                 self.node_.declare_parameter(
-                    self.prefix_ + "centerline_processor.bezier_window_size",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "centerline_processor.bezier_window_size", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(self.prefix_ + "centerline_processor.bezier_overlap"):
@@ -543,9 +606,7 @@ class trajectory_planner:
                 descriptor.integer_range[-1].to_value = 10
                 parameter = updated_params.centerline_processor.bezier_overlap
                 self.node_.declare_parameter(
-                    self.prefix_ + "centerline_processor.bezier_overlap",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "centerline_processor.bezier_overlap", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(
@@ -569,8 +630,7 @@ class trajectory_planner:
                 self.prefix_ + "trajectory_optimization.base_tangent_factor"
             ):
                 descriptor = ParameterDescriptor(
-                    description="Base scaling factor for spline tangent vectors",
-                    read_only=True,
+                    description="Base scaling factor for spline tangent vectors", read_only=True
                 )
                 descriptor.floating_point_range.append(FloatingPointRange())
                 descriptor.floating_point_range[-1].from_value = 0.1
@@ -586,8 +646,7 @@ class trajectory_planner:
                 self.prefix_ + "trajectory_optimization.optimization_time_limit"
             ):
                 descriptor = ParameterDescriptor(
-                    description="Maximum time allowed for optimization (seconds)",
-                    read_only=True,
+                    description="Maximum time allowed for optimization (seconds)", read_only=True
                 )
                 descriptor.floating_point_range.append(FloatingPointRange())
                 descriptor.floating_point_range[-1].from_value = 0.1
@@ -617,8 +676,7 @@ class trajectory_planner:
                 self.prefix_ + "trajectory_optimization.collision_checking.safety_margin"
             ):
                 descriptor = ParameterDescriptor(
-                    description="Safety margin for collision checking (meters)",
-                    read_only=True,
+                    description="Safety margin for collision checking (meters)", read_only=True
                 )
                 descriptor.floating_point_range.append(FloatingPointRange())
                 descriptor.floating_point_range[-1].from_value = 0.05
@@ -738,8 +796,7 @@ class trajectory_planner:
 
             if not self.node_.has_parameter(self.prefix_ + "distance_map.resolution"):
                 descriptor = ParameterDescriptor(
-                    description="Resolution of distance map grid (meters)",
-                    read_only=True,
+                    description="Resolution of distance map grid (meters)", read_only=True
                 )
                 descriptor.floating_point_range.append(FloatingPointRange())
                 descriptor.floating_point_range[-1].from_value = 0.05
@@ -794,9 +851,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 3.0
                 parameter = updated_params.robot_constraints.max_velocity
                 self.node_.declare_parameter(
-                    self.prefix_ + "robot_constraints.max_velocity",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "robot_constraints.max_velocity", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(self.prefix_ + "robot_constraints.max_acceleration"):
@@ -808,9 +863,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 2.0
                 parameter = updated_params.robot_constraints.max_acceleration
                 self.node_.declare_parameter(
-                    self.prefix_ + "robot_constraints.max_acceleration",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "robot_constraints.max_acceleration", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(self.prefix_ + "robot_constraints.max_deceleration"):
@@ -822,9 +875,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 3.0
                 parameter = updated_params.robot_constraints.max_deceleration
                 self.node_.declare_parameter(
-                    self.prefix_ + "robot_constraints.max_deceleration",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "robot_constraints.max_deceleration", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(self.prefix_ + "robot_constraints.max_jerk"):
@@ -846,9 +897,7 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 1.0
                 parameter = updated_params.robot_constraints.max_lateral_accel
                 self.node_.declare_parameter(
-                    self.prefix_ + "robot_constraints.max_lateral_accel",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "robot_constraints.max_lateral_accel", parameter, descriptor
                 )
 
             if not self.node_.has_parameter(self.prefix_ + "robot_constraints.wheel_base"):
@@ -872,13 +921,23 @@ class trajectory_planner:
                 descriptor.floating_point_range[-1].to_value = 5.0
                 parameter = updated_params.robot_constraints.min_turning_radius
                 self.node_.declare_parameter(
-                    self.prefix_ + "robot_constraints.min_turning_radius",
-                    parameter,
-                    descriptor,
+                    self.prefix_ + "robot_constraints.min_turning_radius", parameter, descriptor
                 )
 
             # TODO: need validation
             # get parameters and fill struct fields
+            param = self.node_.get_parameter(self.prefix_ + "map_data.map_path")
+            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+            updated_params.map_data.map_path = param.value
+            param = self.node_.get_parameter(self.prefix_ + "map_data.gps_origin.latitude")
+            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+            updated_params.map_data.gps_origin.latitude = param.value
+            param = self.node_.get_parameter(self.prefix_ + "map_data.gps_origin.longitude")
+            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+            updated_params.map_data.gps_origin.longitude = param.value
+            param = self.node_.get_parameter(self.prefix_ + "map_data.gps_origin.altitude")
+            self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
+            updated_params.map_data.gps_origin.altitude = param.value
             param = self.node_.get_parameter(self.prefix_ + "window_manager.planning_time")
             self.logger_.debug(param.name + ": " + param.type_.name + " = " + str(param.value))
             validation_result = ParameterValidators.bounds(param, 0.2, 5.0)

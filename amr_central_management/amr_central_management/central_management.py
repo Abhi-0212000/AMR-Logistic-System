@@ -16,7 +16,7 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.action import ActionClient
 from rclpy.action.client import GoalStatus, ClientGoalHandle
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -34,6 +34,7 @@ from datetime import datetime, timedelta
 from enum import Enum, auto
 from typing import Optional, Dict, Any
 from .error_handling import create_error_response, ErrorType
+from .amr_central_management_params import amr_central_management
 
 
 class RobotState(Enum):
@@ -46,6 +47,16 @@ class RobotState(Enum):
 class CentralManagementNode(Node):
     def __init__(self):
         super().__init__("amr_central_management")
+
+        # Initialize parameter listener
+        self.param_listener = amr_central_management.ParamListener(self)
+        self.params = self.param_listener.get_params()
+        self._reference_gps = GPSPoint(
+            self.params.gps_origin.latitude,
+            self.params.gps_origin.longitude,
+            self.params.gps_origin.altitude,
+        )
+        self._use_time_based_routing = self.params.use_time_based_routing
 
         # Initialize states
         self._robot_state = RobotState.IDLE
@@ -63,43 +74,32 @@ class CentralManagementNode(Node):
         # self._service_group = ReentrantCallbackGroup()
         # self._topic_group = ReentrantCallbackGroup()
 
-        self._service_group = MutuallyExclusiveCallbackGroup()
-        self._topic_group = MutuallyExclusiveCallbackGroup()
+        self.local_callback_group = MutuallyExclusiveCallbackGroup()
+        self.external_callback_group = MutuallyExclusiveCallbackGroup()
+        self.timer_callback_group = MutuallyExclusiveCallbackGroup()
+        self.topic_callback_group = MutuallyExclusiveCallbackGroup()
 
         # Load parameters and initialize systems
-        self._load_parameters()
+        self.print_params()
         self._initialize_coordinate_transform()
         self._setup_communication_interfaces()
 
         # Start periodic state checking
-        self.create_timer(1.0, self._check_system_health, callback_group=self._topic_group)
+        self.health_check_timer = self.create_timer(
+            1.0, self._check_system_health, callback_group=self.timer_callback_group
+        )
 
         self.get_logger().info("Central Management Node initialized successfully")
 
-    def _load_parameters(self) -> None:
-        """Load and validate parameters from parameter server."""
-        try:
-            self.declare_parameters(
-                namespace="",
-                parameters=[
-                    ("origins.gps_origin.latitude", 0.0),
-                    ("origins.gps_origin.longitude", 0.0),
-                    ("origins.gps_origin.altitude", 0.0),
-                    ("use_time_based_routing", False),
-                ],
-            )
-
-            self._reference_gps = GPSPoint(
-                self.get_parameter("origins.gps_origin.latitude").value,
-                self.get_parameter("origins.gps_origin.longitude").value,
-                self.get_parameter("origins.gps_origin.altitude").value,
-            )
-            self._use_time_based_routing = self.get_parameter("use_time_based_routing").value
-
-            self.get_logger().info(f"Parameters loaded successfully: {self._reference_gps}")
-        except Exception as e:
-            self.get_logger().error(f"Failed to load parameters: {str(e)}")
-            raise
+    def print_params(self):
+        """Print the parameters for debugging."""
+        self.get_logger().info(
+            f"GPS Origin: \
+                {self._reference_gps.latitude}, \
+                {self._reference_gps.longitude}, \
+                {self._reference_gps.altitude}"
+        )
+        self.get_logger().info(f"Use Time Based Routing: {self._use_time_based_routing}")
 
     def _initialize_coordinate_transform(self) -> None:
         """Initialize coordinate transformation system."""
@@ -124,7 +124,7 @@ class CentralManagementNode(Node):
             "robot_pose",
             self._robot_pose_callback,
             self._qos_profile,
-            callback_group=self._topic_group,
+            callback_group=self.topic_callback_group,
         )
 
         # Services
@@ -132,21 +132,21 @@ class CentralManagementNode(Node):
             AmrGoalManagement,
             "amr_goal_management",
             self._handle_goal_request,
-            callback_group=self._service_group,
+            callback_group=self.local_callback_group,
         )
 
         # Service Clients
         self._path_planner_client = self.create_client(
-            ComputeGlobalPath, "global_path_planner", callback_group=self._service_group
+            ComputeGlobalPath, "global_path_planner", callback_group=self.external_callback_group
         )
 
         # Action Clients
         self._navigate_action_client = ActionClient(
-            self, NavigateToGoal, "navigate_to_goal", callback_group=self._service_group
+            self, NavigateToGoal, "navigate_to_goal", callback_group=self.external_callback_group
         )
 
         # Wait for required services
-        self._wait_for_services()
+        # self._wait_for_services()
 
     def _wait_for_services(self) -> None:
         """Wait for required services to become available."""
@@ -175,6 +175,13 @@ class CentralManagementNode(Node):
         if not self._is_pose_valid():
             self.get_logger().warn("Robot pose data is stale or missing")
             self._robot_state = RobotState.ERROR
+        else:
+            self.get_logger().info("Robot pose data is valid and recent")
+            self.get_logger().info(
+                "Setting robot state to IDLE and cancelling health check timer."
+            )
+            self._robot_state = RobotState.IDLE
+            self.health_check_timer.cancel()
 
     def _is_pose_valid(self) -> bool:
         """Check if the robot pose data is valid and recent."""
@@ -202,6 +209,7 @@ class CentralManagementNode(Node):
 
             if path_response.status != 0:
                 self._robot_state = RobotState.IDLE
+                self.get_logger().error(f"Path planning failed: {path_response.message}")
                 return create_error_response(
                     ErrorType.PLANNING_ERROR,
                     f"Path planning failed: {path_response.message}",
@@ -237,6 +245,10 @@ class CentralManagementNode(Node):
     ) -> ComputeGlobalPath.Response:
         """Request path plan with proper error handling."""
         try:
+            if not self._path_planner_client.wait_for_service(timeout_sec=self.SERVICE_TIMEOUT):
+                self.get_logger().error("Path planner service not available")
+                raise RuntimeError("Path planner service not available")
+
             current_pose = self._get_current_pose_as_gps()
 
             path_request = ComputeGlobalPath.Request(
@@ -248,6 +260,8 @@ class CentralManagementNode(Node):
                 end_altitude=request.goal_altitude,
                 use_time_based_routing=self._use_time_based_routing,
             )
+            self.get_logger().info("Requesting path plan from path planner service...")
+            self.get_logger().info(f"Path request: {path_request}")
 
             # Create the future and wait for it explicitly
             future = self._path_planner_client.call_async(path_request)
@@ -255,8 +269,7 @@ class CentralManagementNode(Node):
             return await future
 
         except Exception as e:
-            self.get_logger().error(f"Path planning failed: {str(e)}")
-            raise
+            raise RuntimeError(f"Path planning failed: {str(e)}")
 
     async def _send_navigation_goal(
         self,
@@ -265,6 +278,11 @@ class CentralManagementNode(Node):
     ) -> bool:
         """Send navigation goal to action server with proper error handling."""
         try:
+            # Check if the action server is available before sending the goal
+            if not self._navigate_action_client.wait_for_server(timeout_sec=5.0):
+                self.get_logger().error("Navigation action server is not available")
+                raise RuntimeError("Navigation action server is not available")
+
             goal_msg = NavigateToGoal.Goal(
                 goal_gps=[
                     original_request.goal_latitude,
@@ -353,24 +371,18 @@ class CentralManagementNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
+    node = CentralManagementNode()
 
+    # Create MultiThreadedExecutor to handle async operations
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        node = CentralManagementNode()
-
-        # Create MultiThreadedExecutor to handle async operations
-        # executor = MultiThreadedExecutor(num_threads=2)
-        executor = SingleThreadedExecutor()
-        executor.add_node(node)
-
-        try:
-            executor.spin()
-        finally:
-            executor.shutdown()
-            node.destroy_node()
-    except Exception as e:
-        if rclpy.ok():
-            rclpy.get_logger("central_management_node").error(f"Node failed: {str(e)}")
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
     finally:
+        node.get_logger().info("Shutting down Central Management Node")
+        node.destroy_node()
         rclpy.shutdown()
 
 

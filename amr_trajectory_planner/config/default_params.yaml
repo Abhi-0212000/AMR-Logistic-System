@@ -1,0 +1,5 @@
+# central_management_params.yaml
+trajectory_planner_action_server:
+  ros__parameters:
+    map_data:
+      map_path: "/home/qte9489/ros2_ws/src/AMR-Logistic-System/laneletMaps/HS-SchmalkaldenPart1.osm"

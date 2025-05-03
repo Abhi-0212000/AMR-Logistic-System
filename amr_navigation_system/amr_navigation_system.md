@@ -92,9 +92,9 @@ ros2 service call /global_path_planner amr_interfaces/srv/ComputeGlobalPath "{
   start_longitude: 10.4683083,
   start_altitude: 0.0,
   end_latitude: 50.7154152,
-  end_longitude: 11.0,
+  end_longitude: 10.4678595,
   end_altitude: 0.0,
-  use_time_based_routing: true
+  use_time_based_routing: false
 }"
 ```
 Output should be:

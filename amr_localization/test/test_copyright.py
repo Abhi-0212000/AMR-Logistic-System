@@ -14,28 +14,12 @@
 
 from ament_copyright.main import main
 import pytest
-import glob
-import os
 
 
 # Remove the `skip` decorator once the source file(s) have a copyright header
-# @pytest.mark.skip(
-#     reason="No copyright header has been placed in the generated source file."
-# )
-# List of files to exclude from the copyright check
-
-EXCLUDED_FILES = ["amr_central_management_params.py"]
-
-
+@pytest.mark.skip(reason="No copyright header has been placed in the generated source file.")
 @pytest.mark.copyright
 @pytest.mark.linter
 def test_copyright():
-    # Get all Python files
-    all_files = glob.glob("**/*.py", recursive=True)
-
-    # Filter out excluded files
-    files_to_check = [f for f in all_files if os.path.basename(f) not in EXCLUDED_FILES]
-
-    # Run copyright check only on allowed files
-    rc = main(argv=files_to_check)
+    rc = main(argv=[".", "test"])
     assert rc == 0, "Found errors"

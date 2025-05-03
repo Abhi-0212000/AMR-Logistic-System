@@ -1,17 +1,17 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>amr_central_management</name>
+  <name>amr_localization</name>
   <version>0.0.0</version>
-  <description>amr_central_management: It manages the AMR goals, error handling</description>
+  <description>Dummy localization node for AMR</description>
   <maintainer email="abhishek.nannuri@outlook.com">Abhishek Nannuri</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
-  <depend>amr_interfaces</depend>
-  <depend>amr_utils_python</depend>
+  <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>generate_parameter_library_py</depend>
+  <depend>amr_interfaces</depend>
+
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

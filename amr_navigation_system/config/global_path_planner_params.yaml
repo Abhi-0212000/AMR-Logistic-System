@@ -4,10 +4,10 @@
 amr_global_path_planner:
   ros__parameters:
     paths:
-      map_path: "/ros2_ws/src/amr_navigation_system/laneletMaps/HS-SchmalkaldenPart1.osm"
+      map_path: "~/ros2_ws/src/AMR-Logistic-System/laneletMaps/HS-SchmalkaldenPart1.osm"
       # debug_path will use the default if not specified
       # Uncomment and modify this line if you want to override the default debug path
-      debug_path: "/ros2_ws/AMR/graph_debug"
+      debug_path: "~/ros2_ws/AMR/graph_debug"
       
     origins:
       # gps_origin is used to load the .OSM map. It doesnt have to be at exact center of the .OSM map
@@ -32,6 +32,6 @@ amr_global_path_planner:
       export_built_graph: false
 
     log_data:
-      log_path: "/ros2_ws/AMR/logs"
+      log_path: "~/ros2_ws/AMR/logs"
       log_file_type: "json" # json or log . ONly those 2 types of logs are supported
       log_level: 1 # 0: Debug, 1: Info, 2: Warning, 3: Error, 4: Fatal

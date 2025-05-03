@@ -11,6 +11,8 @@ from action_msgs.msg import GoalStatus
 from amr_interfaces.action import NavigateToGoal
 
 from .amr_trajectory_planner_params import trajectory_planner
+from .lanelet_map_manager import LaneletMapManager
+from amr_utils_python.coordinate_transforms_py import GPSPoint
 
 
 class TrajectoryPlannerActionServer(Node):
@@ -140,6 +142,7 @@ class TrajectoryPlannerActionServer(Node):
         self.get_logger().info(
             f"  min_turning_radius: {self.params.robot_constraints.min_turning_radius}"
         )
+        self.get_logger().info(f"map_path: {self.params.map_data.map_path}")
 
     def goal_callback(self, goal_request):
         """
@@ -196,6 +199,95 @@ class TrajectoryPlannerActionServer(Node):
         )  # Default to 60s if not specified
 
         try:
+            self.get_logger().info(
+                f"Initializing Lanelet Map Manager with {self.params.map_data.map_path}"
+            )
+            map_origin_gps = GPSPoint(
+                self.params.map_data.gps_origin.latitude,
+                self.params.map_data.gps_origin.longitude,
+                self.params.map_data.gps_origin.altitude,
+            )
+            map_manager = LaneletMapManager(self, self.params.map_data.map_path, map_origin_gps)
+
+            # Load the map
+            if not map_manager.load_map():
+                self.get_logger().error("Failed to load lanelet map")
+                raise RuntimeError("Failed to load lanelet map")
+
+            # Build routing graph
+            if not map_manager.build_routing_graph():
+                self.get_logger().error("Failed to build routing graph")
+                raise RuntimeError("Failed to build routing graph")
+
+            self.get_logger().info("Successfully loaded lanelet map and built routing graph")
+
+            # Process each lanelet from the goal
+            self.get_logger().info("Processing lanelets from goal:")
+            for i, lanelet_id in enumerate(goal.lanelet_ids):
+                # Get the correct inverted flag from the client message
+                inverted = goal.is_inverted[i]
+
+                self.get_logger().info(f"Loading lanelet {lanelet_id}, inverted: {inverted}")
+
+                # Get the lanelet
+                lanelet = map_manager.get_lanelet_by_id(lanelet_id, inverted)
+
+                if lanelet is not None:
+                    # Print some lanelet information
+                    self.get_logger().info(f"  - Lanelet ID: {lanelet.id}")
+
+                    # Get lanelet attributes
+                    attributes = []
+                    for key, value in lanelet.attributes.items():
+                        attributes.append(f"{key}: {value}")
+                    self.get_logger().info(f"  - Attributes: {', '.join(attributes)}")
+
+                    # Print information about the lanelet points
+                    self.get_logger().info(
+                        f"  - Centerline point count: {len(lanelet.centerline)}"
+                    )
+                    self.get_logger().info(f"  - Left bound point count: {len(lanelet.leftBound)}")
+                    self.get_logger().info(
+                        f"  - Right bound point count: {len(lanelet.rightBound)}"
+                    )
+
+                    # Print first and last centerline points if available
+                    if len(lanelet.centerline) > 0:
+                        first_point = lanelet.centerline[0]
+                        last_point = lanelet.centerline[-1]
+                        self.get_logger().info(
+                            f"  - First centerline point: \
+                                ({first_point.x:.2f}, {first_point.y:.2f})"
+                        )
+                        self.get_logger().info(
+                            f"  - Last centerline point: ({last_point.x:.2f}, {last_point.y:.2f})"
+                        )
+
+                    # Check if lanelet is navigable by AMR
+                    is_navigable = (
+                        "amr_navigable" in lanelet.attributes
+                        and lanelet.attributes["amr_navigable"] == "yes"
+                    )
+                    self.get_logger().info(f"  - AMR Navigable: {is_navigable}")
+
+                    # Check if lanelet is one-way
+                    is_one_way = (
+                        "one_way" in lanelet.attributes and lanelet.attributes["one_way"] == "yes"
+                    )
+                    self.get_logger().info(f"  - One Way: {is_one_way}")
+
+                    # Check if lanelet is bidirectional
+                    is_bidir = (
+                        "bidirectional" in lanelet.attributes
+                        and lanelet.attributes["bidirectional"] == "yes"
+                    )
+                    self.get_logger().info(f"  - Bidirectional: {is_bidir}")
+                else:
+                    self.get_logger().error(f"  - Failed to get lanelet with ID: {lanelet_id}")
+
+            # Continue with the existing simulation code
+            self.get_logger().info("Continuing with trajectory execution simulation...")
+
             # Simulate planning and execution process
             total_steps = 20  # More steps for a smoother simulation
             for i in range(1, total_steps + 1):

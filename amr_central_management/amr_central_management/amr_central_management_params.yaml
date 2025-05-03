@@ -1,0 +1,34 @@
+# amr_central_management_params.yaml - Generate Parameter Library Format
+
+# Root parameter namespace
+amr_central_management:
+  # GPS origin parameters for coordinate transformation and map loading
+  gps_origin:
+    latitude:
+      type: double
+      default_value: 50.7153508
+      read_only: true
+      description: "Latitude of the GPS origin for coordinate transformation and map loading"
+      validation:
+        bounds<>: [-90.0, 90.0]
+    
+    longitude:
+      type: double
+      default_value: 10.4680332
+      read_only: true
+      description: "Longitude of the GPS origin for coordinate transformation and map loading"
+      validation:
+        bounds<>: [-180.0, 180.0]
+    
+    altitude:
+      type: double
+      default_value: 0.0
+      read_only: true
+      description: "Altitude of the GPS origin for coordinate transformation and map loading"
+  
+  # Routing parameters
+  use_time_based_routing:
+    type: bool
+    default_value: false
+    read_only: true
+    description: "Whether to use time-based path calculation. Currently only constant speed on all road types is implemented."
