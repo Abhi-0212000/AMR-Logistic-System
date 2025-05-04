@@ -21,6 +21,8 @@ rosidl_generate_interfaces(
   "srv/AmrGoalManagement.srv"
   "msg/LogMessage.msg"
   "msg/RobotPose.msg"
+  "msg/TrajectoryPoint.msg"
+  "msg/Trajectory.msg"
   "action/NavigateToGoal.action"
   DEPENDENCIES geometry_msgs action_msgs  # Ensure that the generated service can depend on geometry_msgs
 )
