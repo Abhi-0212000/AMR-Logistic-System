@@ -145,7 +145,6 @@ class CentralManagementNode(Node):
             self, NavigateToGoal, "navigate_to_goal", callback_group=self.external_callback_group
         )
 
-
     def _robot_pose_callback(self, msg: RobotPose) -> None:
         """Update robot pose with timestamp."""
         self._latest_robot_pose = msg
