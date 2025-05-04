@@ -15,18 +15,16 @@ services:
       - CYCLONEDDS_URI=/.ros/cyclonedds.xml
     volumes:
       - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro # Need this file to enable container and host comms
-      - ./amr_navigation_system/config:/ros2_ws/src/amr_navigation_system/config:rw
-      - ./laneletMaps:/ros2_ws/src/amr_navigation_system/laneletMaps:rw
       - ./AMR:/ros2_ws/AMR:rw # mounted to view logs.
     command: ros2 run amr_navigation_system global_path_planner --ros-args --params-file /ros2_ws/src/amr_navigation_system/config/global_path_planner_params.yaml
 
-  amr_local_planner:
+  amr_trajectory_planner:
     # Using the same image that's built by amr_global_planner
     image: amr-services:latest
-    container_name: amr_local_planner
+    container_name: amr_trajectory_planner
     ipc: host
     network_mode: host
-    depends_on:  # Docker will start amr_global_planner before starting amr_local_planner
+    depends_on:  # Docker will start amr_global_planner before starting amr_trajectory_planner
       - amr_global_planner
     environment:
       - ROS_DOMAIN_ID
@@ -34,6 +32,34 @@ services:
       - CYCLONEDDS_URI=/.ros/cyclonedds.xml
     volumes:
       - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro
-      - ./laneletMaps:/ros2_ws/laneletMaps:ro
-      - ./AMR:/ros2_ws/AMR:rw
-    command: ["/bin/bash", "-c", "source /ros2_ws/install/setup.bash && python3 -m amr_local_planner_python.local_planner_node"]
+    command: ros2 run amr_trajectory_planner amr_trajectory_planner_node --ros-args --params-file /ros2_ws/src/amr_trajectory_planner/config/default_params.yaml
+  
+  amr_localization:
+    image: amr-services:latest
+    container_name: amr_localization
+    ipc: host
+    network_mode: host
+    depends_on:  # Docker will start amr_trajectory_planner before starting amr_localization
+      - amr_trajectory_planner
+    environment:
+      - ROS_DOMAIN_ID
+      - RMW_IMPLEMENTATION
+      - CYCLONEDDS_URI=/.ros/cyclonedds.xml
+    volumes:
+      - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro
+    command: ros2 run amr_localization dummy_localization_node
+
+  amr_central_management:
+    image: amr-services:latest
+    container_name: amr_central_management
+    ipc: host
+    network_mode: host
+    depends_on:  # Docker will start amr_localization before starting amr_central_management
+      - amr_localization
+    environment:
+      - ROS_DOMAIN_ID
+      - RMW_IMPLEMENTATION
+      - CYCLONEDDS_URI=/.ros/cyclonedds.xml
+    volumes:
+      - ~/.ros/cyclonedds.xml:/.ros/cyclonedds.xml:ro
+    command: ros2 run amr_central_management amr_central_management_node --ros-args --params-file /ros2_ws/src/amr_central_management/config/default_params.yaml

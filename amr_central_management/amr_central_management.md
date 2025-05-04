@@ -5,5 +5,5 @@ ros2 service call /amr_goal_management amr_interfaces/srv/AmrGoalManagement \
 
 launching node:
 ```sh
-ros2 run amr_central_management amr_central_management
+ros2 run amr_central_management amr_central_management_node
 ```

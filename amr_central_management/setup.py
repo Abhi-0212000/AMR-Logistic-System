@@ -42,6 +42,6 @@ setup(
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": [f"amr_central_management = {package_name}.central_management:main"],
+        "console_scripts": [f"amr_central_management_node = {package_name}.central_management:main"],
     },
 )
