@@ -145,25 +145,6 @@ class CentralManagementNode(Node):
             self, NavigateToGoal, "navigate_to_goal", callback_group=self.external_callback_group
         )
 
-        # Wait for required services
-        # self._wait_for_services()
-
-    def _wait_for_services(self) -> None:
-        """Wait for required services to become available."""
-        services = {
-            "global_path_planner": self._path_planner_client,
-            # 'navigate_to_goal': self._navigate_action_client
-        }
-
-        for name, service in services.items():
-            try:
-                if not service.wait_for_service(timeout_sec=self.SERVICE_TIMEOUT):
-                    self.get_logger().error(f"{name} service not available")
-                    raise RuntimeError(f"{name} service not available")
-                self.get_logger().info(f"{name} service is available")
-            except Exception as e:
-                self.get_logger().error(f"Error waiting for {name}: {str(e)}")
-                raise
 
     def _robot_pose_callback(self, msg: RobotPose) -> None:
         """Update robot pose with timestamp."""
