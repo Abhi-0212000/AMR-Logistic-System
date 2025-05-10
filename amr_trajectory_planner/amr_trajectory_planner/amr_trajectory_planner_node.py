@@ -9,6 +9,7 @@ from rclpy.executors import MultiThreadedExecutor
 
 from action_msgs.msg import GoalStatus
 from amr_interfaces.action import NavigateToGoal
+from amr_interfaces.msg import RobotPose, Trajectory
 
 from .amr_trajectory_planner_params import trajectory_planner
 from .lanelet_map_manager import LaneletMapManager
@@ -29,6 +30,15 @@ class TrajectoryPlannerActionServer(Node):
         # Print all parameter values to demonstrate parameter access
         self.print_parameters()
 
+        self.set_up_communication_interfaces()
+
+        # Flag to track if goal is being executed
+        self._goal_executing = False
+
+        self.get_logger().info("Trajectory planner action server started")
+
+    def set_up_communication_interfaces(self):
+        """Set up the communication interfaces for the trajectory planner"""
         # Create action server
         self._action_server = ActionServer(
             self,
@@ -39,18 +49,72 @@ class TrajectoryPlannerActionServer(Node):
             goal_callback=self.goal_callback,
             cancel_callback=self.cancel_callback,
         )
+        self.get_logger().info("Action server for trajectory planner initialized")
+        
+        self.pose_subscriber = self.create_subscription(
+            RobotPose,
+            "robot_pose",
+            self.robot_pose_callback,
+            10,
+        )
+        self.get_logger().info("Subscription to robot pose topic initialized")
 
-        # Flag to track if goal is being executed
-        self._goal_executing = False
-
-        self.get_logger().info("Trajectory planner action server started")
+        self.trajectory_publisher = self.create_publisher(
+            Trajectory,
+            "trajectory",
+            10,
+        )
+        self.get_logger().info("Publisher for trajectory topic initialized")
 
     def init_trajectory_planner_configs(self):
+        """Initialize the trajectory planner configurations from parameters"""
         self.window_manager_config = WindowConfig(
             planning_time=self.params.window_manager.planning_time,
             buffer_time=self.params.window_manager.buffer_time,
             lookahead_points=self.params.window_manager.lookahead_points,
         )
+        self.centerline_processor_config = CenterlineProcessorConfig(
+            interpolation_method=self.params.centerline_processor.interpolation_method,
+            target_spacing=self.params.centerline_processor.target_spacing,
+            spacing_tolerance=self.params.centerline_processor.spacing_tolerance,
+            bezier_window_size=self.params.centerline_processor.bezier_window_size,
+            bezier_overlap=self.params.centerline_processor.bezier_overlap,
+        )
+        self.trajectory_optimization_config = TrajectoryOptimizerConfig(
+            trajectory_point_count=self.params.trajectory_optimization.trajectory_point_count,
+            base_tangent_factor=self.params.trajectory_optimization.base_tangent_factor,
+            optimization_time_limit=self.params.trajectory_optimization.optimization_time_limit,
+            arc_length_calculation_method=self.params.trajectory_optimization.arc_length_calculation_method,
+            collision_checking=CollisionCheckingConfig(
+                safety_margin=self.params.trajectory_optimization.collision_checking.safety_margin,
+                collision_check_interval=self.params.trajectory_optimization.collision_checking.collision_check_interval,
+            ),
+            rprop=RPROPConfig(
+                initial_step_size=self.params.trajectory_optimization.rprop.initial_step_size,
+                minimum_step_size=self.params.trajectory_optimization.rprop.minimum_step_size,
+                maximum_step_size=self.params.trajectory_optimization.rprop.maximum_step_size,
+                increase_factor=self.params.trajectory_optimization.rprop.increase_factor,
+                decrease_factor=self.params.trajectory_optimization.rprop.decrease_factor,
+            ),
+        )
+        self.distance_map_config = DistanceMapConfig(
+            resolution=self.params.distance_map.resolution,
+            window_size=self.params.distance_map.window_size,
+            use_sobel=self.params.distance_map.use_sobel,
+            sobel_threshold=self.params.distance_map.sobel_threshold,
+        )
+        self.robot_constraints_config = RobotConstraintsConfig(
+            v_max=self.params.robot_constraints.v_max,
+            omega_max=self.params.robot_constraints.omega_max,
+            a_t_max=self.params.robot_constraints.a_t_max,
+            a_r_max=self.params.robot_constraints.a_r_max,
+            f_max=self.params.robot_constraints.f_max,
+            mass=self.params.robot_constraints.mass,
+            t_react=self.params.robot_constraints.t_react,
+            wheel_base=self.params.robot_constraints.wheel_base,
+            min_turning_radius=self.params.robot_constraints.min_turning_radius,
+        )
+
 
     def print_parameters(self):
         """Print all parameter values from the parameter library"""
