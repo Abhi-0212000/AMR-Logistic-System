@@ -204,41 +204,55 @@ trajectory_planner:
 
   # Constraints of the robot that are crucial for generating feasible trajectories.
   robot_constraints:
-    max_velocity:
+    v_max:
       type: double
       default_value: 1.5
       read_only: true
-      description: "Maximum velocity (m/s)"
+      description: "Maximum translational velocity (m/s)"
       validation:
         bounds: [0.1, 3.0]
-    max_acceleration:
+    omega_max:
       type: double
-      default_value: 1.0
+      default_value: 1.5
       read_only: true
-      description: "Maximum acceleration (m/s²)"
+      description: "Maximum rotational velocity (rad/s)"
       validation:
         bounds: [0.1, 2.0]
-    max_deceleration:
-      type: double
-      default_value: 2.0
-      read_only: true
-      description: "Maximum deceleration (m/s²)"
-      validation:
-        bounds: [0.1, 3.0]
-    max_jerk:
-      type: double
-      default_value: 1.0
-      read_only: true
-      description: "Maximum jerk (m/s³)"
-      validation:
-        bounds: [0.1, 5.0]
-    max_lateral_accel:
+    a_t_max:
       type: double
       default_value: 0.5
       read_only: true
-      description: "Maximum lateral acceleration (m/s²)"
+      description: "Maximum translational acceleration/deceleration (m/s²)"
       validation:
-        bounds: [0.1, 1.0]
+        bounds: [0.1, 2.0]
+    a_r_max:
+      type: double
+      default_value: 1.0
+      read_only: true
+      description: "Maximum rotational acceleration/deceleration (rad/s²)"
+      validation:
+        bounds: [0.1, 2.0]
+    f_max:
+      type: double
+      default_value: 40.0
+      read_only: true
+      description: "Maximum centripetal force (N) 40N (for a robot with mass m = 10 kg and min turning radius r = 1 m. i.e f = m * v^2 / r and v = 2.0 m/s i.e max velocity)"
+      validation:
+        bounds: [0.1, 100.0]
+    mass:
+      type: double
+      default_value: 10.0
+      read_only: true
+      description: "Mass of the robot (kg)"
+      validation:
+        bounds: [1.0, 100.0]
+    t_react:
+      type: double
+      default_value: 0.1
+      read_only: true
+      description: "Reaction time of the robot (seconds)"
+      validation:
+        bounds: [0.1, 2.0]
     wheel_base:
       type: double
       default_value: 0.5

@@ -13,7 +13,7 @@ from amr_interfaces.action import NavigateToGoal
 from .amr_trajectory_planner_params import trajectory_planner
 from .lanelet_map_manager import LaneletMapManager
 from amr_utils_python.coordinate_transforms_py import GPSPoint
-
+from .config_types import *
 
 class TrajectoryPlannerActionServer(Node):
     def __init__(self):
@@ -22,6 +22,9 @@ class TrajectoryPlannerActionServer(Node):
         # Initialize parameter listener
         self.param_listener = trajectory_planner.ParamListener(self)
         self.params = self.param_listener.get_params()
+
+        # Initialize trajectory planner parameters
+        self.init_trajectory_planner_configs()
 
         # Print all parameter values to demonstrate parameter access
         self.print_parameters()
@@ -41,6 +44,13 @@ class TrajectoryPlannerActionServer(Node):
         self._goal_executing = False
 
         self.get_logger().info("Trajectory planner action server started")
+
+    def init_trajectory_planner_configs(self):
+        self.window_manager_config = WindowConfig(
+            planning_time=self.params.window_manager.planning_time,
+            buffer_time=self.params.window_manager.buffer_time,
+            lookahead_points=self.params.window_manager.lookahead_points,
+        )
 
     def print_parameters(self):
         """Print all parameter values from the parameter library"""
@@ -127,21 +137,18 @@ class TrajectoryPlannerActionServer(Node):
 
         # Robot Constraints Parameters
         self.get_logger().info("Robot Constraints Parameters:")
-        self.get_logger().info(f"  max_velocity: {self.params.robot_constraints.max_velocity}")
-        self.get_logger().info(
-            f"  max_acceleration: {self.params.robot_constraints.max_acceleration}"
-        )
-        self.get_logger().info(
-            f"  max_deceleration: {self.params.robot_constraints.max_deceleration}"
-        )
-        self.get_logger().info(f"  max_jerk: {self.params.robot_constraints.max_jerk}")
-        self.get_logger().info(
-            f"  max_lateral_accel: {self.params.robot_constraints.max_lateral_accel}"
-        )
+        self.get_logger().info(f"  v_max: {self.params.robot_constraints.v_max}")
+        self.get_logger().info(f"  omega_max: {self.params.robot_constraints.omega_max}")
+        self.get_logger().info(f"  a_t_max: {self.params.robot_constraints.a_t_max}")
+        self.get_logger().info(f"  a_r_max: {self.params.robot_constraints.a_r_max}")
+        self.get_logger().info(f"  f_max: {self.params.robot_constraints.f_max}")
+        self.get_logger().info(f"  mass: {self.params.robot_constraints.mass}")
+        self.get_logger().info(f"  t_react: {self.params.robot_constraints.t_react}")
         self.get_logger().info(f"  wheel_base: {self.params.robot_constraints.wheel_base}")
         self.get_logger().info(
             f"  min_turning_radius: {self.params.robot_constraints.min_turning_radius}"
         )
+
         self.get_logger().info(f"map_path: {self.params.map_data.map_path}")
 
     def goal_callback(self, goal_request):
@@ -179,16 +186,14 @@ class TrajectoryPlannerActionServer(Node):
         self.get_logger().info("Executing goal...")
         self._goal_executing = True
 
-        # Extract goal details for logging
+        # Extract goal details
         goal = goal_handle.request
-        lanelet_count = len(goal.lanelet_ids)
-
-        self.get_logger().info(f"Planning trajectory through {lanelet_count} lanelets")
-        self.get_logger().info(f"Goal GPS: [{goal.goal_gps[0]}, {goal.goal_gps[1]}]")
-
-        # Set up feedback and result messages
         feedback_msg = NavigateToGoal.Feedback()
         result = NavigateToGoal.Result()
+
+        lanelet_count = len(goal.lanelet_ids)
+        self.get_logger().info(f"Planning trajectory through {lanelet_count} lanelets")
+        self.get_logger().info(f"Goal GPS: [{goal.goal_gps[0]}, {goal.goal_gps[1]}]")
 
         # Initialize distance and time (for simulation)
         total_distance = (
@@ -343,6 +348,102 @@ class TrajectoryPlannerActionServer(Node):
 
         finally:
             self._goal_executing = False
+
+        return result
+
+    def execute_callback1(self, goal_handle):
+        """Execute the goal"""
+        self.get_logger().info("Executing goal...")
+        self._goal_executing = True
+
+        # Extract goal details
+        goal = goal_handle.request
+        feedback_msg = NavigateToGoal.Feedback()
+        result = NavigateToGoal.Result()
+
+        # Initialize necessary components
+        try:
+            # Initialize map and planning components
+            map_manager = self._initialize_map_manager(goal)
+            window_manager = self._initialize_window_manager(map_manager, goal)
+
+            # Planning state variables
+            window_index = 0
+            planning_complete = False
+            robot_position = self._get_initial_position(
+                goal
+            )  # Either from goal or from pose service
+
+            # Main planning loop
+            while not planning_complete:
+                # Check for cancellation
+                if goal_handle.is_cancel_requested:
+                    self._handle_cancellation(goal_handle, result, window_index)
+                    return result
+
+                # Process current window
+                try:
+                    window_start_time = time.time()
+
+                    # Generate trajectory for current window
+                    current_trajectory, initial_trajectory = window_manager.process_window(
+                        robot_position, window_index
+                    )
+
+                    # Verify trajectory
+                    if not self._verify_trajectory(current_trajectory):
+                        raise RuntimeError(f"Invalid trajectory data for window {window_index}")
+
+                    # Simulate/execute trajectory
+                    self._execute_trajectory(current_trajectory)
+
+                    # Update position for next window
+                    robot_position = self._get_updated_position(current_trajectory)
+
+                    # Check if planning is complete
+                    if window_manager.is_final_window(window_index):
+                        planning_complete = True
+                        self.get_logger().info("Final window completed, goal achieved")
+
+                    # Save window data if needed
+                    self._save_window_data(current_trajectory, initial_trajectory, window_index)
+
+                    # Increment window index
+                    window_index += 1
+
+                    # Update and send feedback
+                    self._update_and_send_feedback(
+                        goal_handle, feedback_msg, window_index, window_manager, current_trajectory
+                    )
+
+                except Exception as e:
+                    self.get_logger().error(f"Error processing window {window_index}: {str(e)}")
+                    # Decide whether to retry, skip window, or abort based on error type
+                    if self._is_fatal_error(e):
+                        raise  # Re-throw to be caught by outer try/except
+                    else:
+                        self.get_logger().warn(f"Attempting to continue with next window")
+                        window_index += 1  # Skip problematic window
+
+            # Success case
+            goal_handle.succeed()
+            result.status = GoalStatus(status=GoalStatus.STATUS_SUCCEEDED)
+            result.message = "Navigation completed successfully"
+            result.total_distance = window_manager.get_total_distance()
+            result.total_time = window_manager.get_total_time()
+
+        except Exception as e:
+            # Handle all exceptions during execution
+            self.get_logger().error(f"Goal execution failed: {str(e)}")
+            goal_handle.abort()
+            result.status = GoalStatus(status=GoalStatus.STATUS_ABORTED)
+            result.message = f"Failed to plan trajectory: {str(e)}"
+            result.total_distance = 0.0
+            result.total_time = 0.0
+
+        finally:
+            self._goal_executing = False
+            self._cleanup_resources()
 
         return result
 
