@@ -166,3 +166,14 @@ class TrajectoryInfo:
     point_params: List[
         Tuple[int, float, float]
     ]  # (segment_index, local_parameter, heading) for each point
+
+
+@dataclass
+class TrajectoryWindow:
+    """Contains data for a trajectory window"""
+
+    points: List[List[float]]
+    left_boundary: np.ndarray
+    right_boundary: np.ndarray
+    start_idx: int
+    active_lanelet_ids: List[int]

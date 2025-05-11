@@ -16,6 +16,7 @@ from .lanelet_map_manager import LaneletMapManager
 from amr_utils_python.coordinate_transforms_py import GPSPoint
 from .config_types import *
 
+
 class TrajectoryPlannerActionServer(Node):
     def __init__(self):
         super().__init__("trajectory_planner_action_server")
@@ -50,7 +51,7 @@ class TrajectoryPlannerActionServer(Node):
             cancel_callback=self.cancel_callback,
         )
         self.get_logger().info("Action server for trajectory planner initialized")
-        
+
         self.pose_subscriber = self.create_subscription(
             RobotPose,
             "robot_pose",
@@ -65,6 +66,9 @@ class TrajectoryPlannerActionServer(Node):
             10,
         )
         self.get_logger().info("Publisher for trajectory topic initialized")
+
+    def robot_pose_callback(self, msg):
+        pass
 
     def init_trajectory_planner_configs(self):
         """Initialize the trajectory planner configurations from parameters"""
@@ -114,7 +118,6 @@ class TrajectoryPlannerActionServer(Node):
             wheel_base=self.params.robot_constraints.wheel_base,
             min_turning_radius=self.params.robot_constraints.min_turning_radius,
         )
-
 
     def print_parameters(self):
         """Print all parameter values from the parameter library"""
@@ -292,6 +295,7 @@ class TrajectoryPlannerActionServer(Node):
 
             # Process each lanelet from the goal
             self.get_logger().info("Processing lanelets from goal:")
+            centerline_points = []
             for i, lanelet_id in enumerate(goal.lanelet_ids):
                 # Get the correct inverted flag from the client message
                 inverted = goal.is_inverted[i]
@@ -300,6 +304,8 @@ class TrajectoryPlannerActionServer(Node):
 
                 # Get the lanelet
                 lanelet = map_manager.get_lanelet_by_id(lanelet_id, inverted)
+                centerline = [[point.x, point.y] for point in lanelet.centerline]
+                centerline_points.extend(centerline)
 
                 if lanelet is not None:
                     # Print some lanelet information
@@ -422,31 +428,51 @@ class TrajectoryPlannerActionServer(Node):
 
         # Extract goal details
         goal = goal_handle.request
+        self.lanelet_ids = goal.lanelet_ids
+        self.is_inverted = goal.is_inverted
+
         feedback_msg = NavigateToGoal.Feedback()
         result = NavigateToGoal.Result()
 
-        # Initialize necessary components
         try:
-            # Initialize map and planning components
-            map_manager = self._initialize_map_manager(goal)
-            window_manager = self._initialize_window_manager(map_manager, goal)
+            # Initialize map manager
+            self.get_logger().info(f"Initializing map with {self.params.map_data.map_path}")
+            map_origin_gps = GPSPoint(
+                self.params.map_data.gps_origin.latitude,
+                self.params.map_data.gps_origin.longitude,
+                self.params.map_data.gps_origin.altitude,
+            )
+            self.map_manager = LaneletMapManager(
+                self, self.params.map_data.map_path, map_origin_gps
+            )
+
+            # Load map and build routing graph
+            if not self.map_manager.load_map():
+                raise RuntimeError("Failed to load lanelet map")
+            self.get_logger().info("Successfully loaded map and built routing graph")
+
+            # Initialize window manager and trajectory generation components
+            window_manager = self._initialize_window_manager(self.map_manager, goal)
 
             # Planning state variables
             window_index = 0
             planning_complete = False
-            robot_position = self._get_initial_position(
-                goal
-            )  # Either from goal or from pose service
+            robot_position = self._get_initial_position(goal)
 
             # Main planning loop
             while not planning_complete:
                 # Check for cancellation
                 if goal_handle.is_cancel_requested:
-                    self._handle_cancellation(goal_handle, result, window_index)
+                    goal_handle.canceled()
+                    self.get_logger().info("Goal canceled")
+                    result.status = GoalStatus(status=GoalStatus.STATUS_CANCELED)
+                    result.message = "Navigation canceled by user"
                     return result
 
                 # Process current window
                 try:
+                    # Log starting window processing
+                    self.get_logger().info(f"Processing window {window_index}")
                     window_start_time = time.time()
 
                     # Generate trajectory for current window
@@ -454,14 +480,33 @@ class TrajectoryPlannerActionServer(Node):
                         robot_position, window_index
                     )
 
-                    # Verify trajectory
-                    if not self._verify_trajectory(current_trajectory):
-                        raise RuntimeError(f"Invalid trajectory data for window {window_index}")
+                    # Calculate planning duration for feedback
+                    planning_duration = time.time() - window_start_time
 
-                    # Simulate/execute trajectory
-                    self._execute_trajectory(current_trajectory)
+                    # Verify trajectory is valid
+                    if not current_trajectory or not current_trajectory.planning_points:
+                        raise RuntimeError(
+                            f"Failed to generate trajectory for window {window_index}"
+                        )
 
-                    # Update position for next window
+                    # Publish trajectory
+                    trajectory_msg = self._trajectory_info_to_msg(current_trajectory)
+                    self.trajectory_publisher.publish(trajectory_msg)
+
+                    # Log success
+                    self.get_logger().info(
+                        f"Window {window_index} processed successfully:"
+                        f"\n  Points: {len(current_trajectory.planning_points)}"
+                        f"\n  Duration: {current_trajectory.planning_points[-1].time:.2f}s"
+                        f"\n  Planning time: {planning_duration:.3f}s"
+                    )
+
+                    # Save trajectory data if needed
+                    self._save_trajectory_data(
+                        current_trajectory, initial_trajectory, window_index
+                    )
+
+                    # Update robot position
                     robot_position = self._get_updated_position(current_trajectory)
 
                     # Check if planning is complete
@@ -469,32 +514,40 @@ class TrajectoryPlannerActionServer(Node):
                         planning_complete = True
                         self.get_logger().info("Final window completed, goal achieved")
 
-                    # Save window data if needed
-                    self._save_window_data(current_trajectory, initial_trajectory, window_index)
+                    # Update and send feedback
+                    distance_remaining = window_manager.get_remaining_distance(window_index)
+                    time_remaining = window_manager.get_remaining_time(window_index)
+                    feedback_msg.distance_remaining = distance_remaining
+                    feedback_msg.estimated_time_remaining = time_remaining
+                    goal_handle.publish_feedback(feedback_msg)
 
                     # Increment window index
                     window_index += 1
 
-                    # Update and send feedback
-                    self._update_and_send_feedback(
-                        goal_handle, feedback_msg, window_index, window_manager, current_trajectory
-                    )
+                    # Wait appropriate time before planning next window
+                    self._wait_for_next_window(current_trajectory, window_manager)
 
                 except Exception as e:
                     self.get_logger().error(f"Error processing window {window_index}: {str(e)}")
-                    # Decide whether to retry, skip window, or abort based on error type
                     if self._is_fatal_error(e):
-                        raise  # Re-throw to be caught by outer try/except
+                        raise  # Re-throw fatal errors
                     else:
+                        # Try to continue with next window
                         self.get_logger().warn(f"Attempting to continue with next window")
-                        window_index += 1  # Skip problematic window
+                        window_index += 1
+
+                        # If too many consecutive errors, abort
+                        if window_index > 3:  # Consider tracking consecutive error count
+                            raise RuntimeError("Too many planning failures, aborting")
 
             # Success case
             goal_handle.succeed()
             result.status = GoalStatus(status=GoalStatus.STATUS_SUCCEEDED)
             result.message = "Navigation completed successfully"
             result.total_distance = window_manager.get_total_distance()
-            result.total_time = window_manager.get_total_time()
+            result.total_time = sum(
+                [t.planning_points[-1].time for t in window_manager.trajectories]
+            )
 
         except Exception as e:
             # Handle all exceptions during execution
