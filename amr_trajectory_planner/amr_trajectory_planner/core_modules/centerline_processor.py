@@ -102,18 +102,31 @@ class CenterlineProcessor:
             lanelet_ids: List of lanelet IDs in order
             config: Optional preprocessing configuration
         """
+        self.node = node
         self.processed_points = self._process_centerline_points()
         self.node.get_logger().info(
             f"Processed {len(self.processed_points)} centerline points using {self.node.centerline_processor_config.method} method"
         )
 
     def _get_original_points(self) -> List[List[float]]:
-        """Get all original centerline points in order"""
+        """Get all original centerline points in order, removing duplicates at lanelet connections"""
         centerline_points = []
         for i, lid in enumerate(self.node.lanelet_ids):
             inverted = self.node.is_inverted[i]
             lanelet = self.node.get_lanelet_by_id(lid, inverted)
             centerline = [[point.x, point.y] for point in lanelet.centerline]
+            
+            # For all but first lanelet, check if we need to skip the first point (duplicate)
+            if centerline_points and i > 0:
+                # If the first point of current lanelet is very close to last point of previous lanelet
+                last_point = centerline_points[-1]
+                first_point = centerline[0]
+                
+                # Use a small epsilon for floating point comparison
+                if abs(last_point[0] - first_point[0]) < 1e-6 and abs(last_point[1] - first_point[1]) < 1e-6:
+                    # Skip the first point of current lanelet to avoid duplication
+                    centerline.pop(0)
+            
             centerline_points.extend(centerline)
         return centerline_points
 

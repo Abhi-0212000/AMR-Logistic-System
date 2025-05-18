@@ -1,22 +1,13 @@
-from hmac import new
-import re
 import numpy as np
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 import time
 from shapely.geometry import Point, Polygon
-from amr_local_planner_py.distance_map import DistanceMapGenerator, DistanceMapConfig
-from amr_local_planner_py.spline_generation import (
-    BezierSplineGenerator,
-    EquidistantPointGenerator,
-    SplineSegment,
-)
-from amr_local_planner_py.velocity_profile import (
-    VelocityProfileGenerator,
-    PlanningPoint,
-    ROBOT_CONSTRAINTS,
-)
-from amr_local_planner_py.common_types import BlendingConstraints, PlanningPoint, TrajectoryInfo
+from amr_trajectory_planner.core_modules.velocity_profile import VelocityProfileGenerator
+from amr_trajectory_planner.core_modules.distance_map import DistanceMapGenerator
+from amr_trajectory_planner.core_modules.spline_generation import BezierSplineGenerator, EquidistantPointGenerator
+from rclpy.node import Node
+from amr_trajectory_planner.config_types import BlendingConstraints, PlanningPoint, TrajectoryInfo
 
 
 @dataclass
@@ -53,77 +44,18 @@ class Parameter:
     rprop_state: RPROPState  # RPROP optimization state
 
 
-# @dataclass
-# class TrajectoryInfo:
-#     """Complete trajectory information"""
-#     waypoints: List[np.ndarray]         # Waypoints defining the path
-#     tangent_factors: List[float]        # Tangent factors for each waypoint
-#     spline_points: List[np.ndarray]     # Points along the spline
-#     planning_points: List[PlanningPoint] # Points with velocity & curvature info
-#     velocity_profile: List[PlanningPoint] # Complete velocity profile
-#     total_time: float                   # Total traversal time
-
-#     # Add spline data needed for blending
-#     spline_segments: List[SplineSegment]  # Contains control points
-#     point_params: List[Tuple[int, float]]  # (segment_idx, parameter_t) for each point
-
-
-@dataclass
-class TrajectoryOptimizerConfig:
-    """Configuration for trajectory optimization"""
-
-    num_points: int = 250  # Number of points for trajectory discretization
-    safety_margin: float = 0.2  # Minimum distance from boundaries (meters)
-    check_stride: int = 5  # Skip points for collision checking
-    base_tangent_factor: float = 0.5  # Base tangent factor
-    gradient_step: float = 1e-4  # Step for numerical gradient
-    optimization_time_limit: float = 1.0  # Time limit for optimization in seconds
-
-    # Distance map configuration
-    distance_map_resolution: float = 0.2  # Grid resolution in meters
-    distance_map_window_size: float = 3.0  # Default local window size in meters
-
-    # Spline generation configuration
-    spline_points_method: str = "simpson"  # Method for arc length calculation
-
-    def __post_init__(self):
-        """Validate configuration parameters"""
-        if self.num_points < 10:
-            raise ValueError("num_points must be at least 10")
-        if self.safety_margin <= 0:
-            raise ValueError("safety_margin must be positive")
-        if self.check_stride < 1:
-            raise ValueError("check_stride must be at least 1")
-        if self.base_tangent_factor <= 0:
-            raise ValueError("base_tangent_factor must be positive")
-        if self.gradient_step <= 0:
-            raise ValueError("gradient_step must be positive")
-        if self.optimization_time_limit <= 0:
-            raise ValueError("optimization_time_limit must be positive")
-        if self.distance_map_resolution <= 0:
-            raise ValueError("distance_map_resolution must be positive")
-        if self.distance_map_window_size <= 0:
-            raise ValueError("distance_map_window_size must be positive")
-        if self.spline_points_method not in ["simpson", "linear"]:
-            raise ValueError("spline_points_method must be 'simpson' or 'linear'")
-
-
 class TrajectoryOptimizer:
     def __init__(
         self,
+        node: Node,
         left_boundary: np.ndarray,
         right_boundary: np.ndarray,
-        config: Optional[TrajectoryOptimizerConfig] = None,
     ):
         """Initialize trajectory optimizer with configuration"""
-        self.config = config if config else TrajectoryOptimizerConfig()
+        self.node = node
+        self.config = self.node.trajectory_optimization_config
 
-        # Create distance map with config parameters
-        dist_map_config = DistanceMapConfig(
-            resolution=self.config.distance_map_resolution,
-            window_size=self.config.distance_map_window_size,
-        )
-        self.dist_map_generator = DistanceMapGenerator(dist_map_config)
+        self.dist_map_generator = DistanceMapGenerator(self.node)
         (
             self.distance_map,
             self.X,
@@ -132,8 +64,8 @@ class TrajectoryOptimizer:
             self.extended_right,
         ) = self.dist_map_generator.create_distance_map(left_boundary, right_boundary)
 
-        # Create path polygon for collision
-        # self.path_polygon = Polygon(np.vstack([self.extended_left, np.flip(self.extended_right, axis=0)]))
+        # Create path polygon for collision. 
+        # TODO: Check if this can be removed by using lanelet2 directly from self.node
         self.path_polygon = Polygon(
             np.vstack(
                 [
@@ -146,14 +78,13 @@ class TrajectoryOptimizer:
         )
 
         # Initialize velocity profile generator
-        self._profile_generator = VelocityProfileGenerator(ROBOT_CONSTRAINTS)
+        self._profile_generator = VelocityProfileGenerator(self.node)
 
         # Window-specific configuration
+        # TODO: Check if this can be replaced by having a central config or params in main node.
         self.spline_config = SplineConfig()
 
-        self.evaluating_initial_trajectory = (
-            True  # We will use this flag to skip collision checking for initial trajectory
-        )
+        self.evaluating_initial_trajectory = True  # Skip collision checking for initial trajectory
 
         # Define Sobel kernels for gradient computation
         self.sobel_x = np.array(
@@ -190,11 +121,21 @@ class TrajectoryOptimizer:
     def reset_rprop_states(self):
         """Reset all RPROP states for a new optimization window"""
         self.rprop_states.clear()
+        self.node.get_logger().debug("RPROP optimization states reset")
 
     def get_rprop_state(self, param_type: str, waypoint_idx: int) -> RPROPState:
         key = (param_type, waypoint_idx)
         if key not in self.rprop_states:
-            self.rprop_states[key] = RPROPState()
+            self.rprop_states[key] = RPROPState(
+                delta_0=self.config.rprop.initial_step_size,
+                delta_min=self.config.rprop.minimum_step_size,
+                delta_max=self.config.rprop.maximum_step_size,
+                eta_plus=self.config.rprop.increase_factor,
+                eta_minus=self.config.rprop.decrease_factor,
+            )
+            self.node.get_logger().debug(
+                f"Created new RPROP state for {param_type} at waypoint {waypoint_idx}"
+            )
         return self.rprop_states[key]
 
     def update_spline_config(
@@ -204,12 +145,21 @@ class TrajectoryOptimizer:
         self.spline_config = SplineConfig(
             is_first_window=is_first_window, is_last_window=is_last_window, blend_data=blend_data
         )
+        self.node.get_logger().info(
+            f"Updated spline config: first_window={is_first_window}, last_window={is_last_window}, "
+            f"blend_data={'provided' if blend_data is not None else 'None'}"
+        )
 
     def update_boundaries(self, left_boundary: np.ndarray, right_boundary: np.ndarray):
         """Update boundaries and regenerate distance map"""
+        self.node.get_logger().info(
+            f"Updating boundaries: left={len(left_boundary)} points, right={len(right_boundary)} points"
+        )
         self.left_boundary = left_boundary
         self.right_boundary = right_boundary
 
+        # Create distance map
+        start_time = time.time()
         (
             self.distance_map,
             self.X,
@@ -217,10 +167,16 @@ class TrajectoryOptimizer:
             self.extended_left,
             self.extended_right,
         ) = self.dist_map_generator.create_distance_map(left_boundary, right_boundary)
-
+        
         # Create path polygon for collision checking
         self.path_polygon = Polygon(
             np.vstack([self.extended_left, np.flip(self.extended_right, axis=0)])
+        )
+        
+        self.node.get_logger().info(
+            f"Distance map updated in {time.time() - start_time:.3f}s: "
+            f"shape={self.distance_map.shape}, boundary points extended to "
+            f"{len(self.extended_left)} left, {len(self.extended_right)} right"
         )
 
     def evaluate_trajectory(
@@ -237,11 +193,11 @@ class TrajectoryOptimizer:
         """
         try:
             self.stats["trajectory_evaluations"] += 1
+            self.node.get_logger().debug(f"Evaluating trajectory with {len(waypoints)} waypoints")
 
-            # print(f"Tangent Factors: {tangent_factors}")
-            # Generate spline
             # Generate spline - Pass blend data for non-first windows
             spline_gen = BezierSplineGenerator(
+                self.node,
                 waypoints,
                 tangent_factors=tangent_factors,
                 blend_constraints=None
@@ -249,12 +205,12 @@ class TrajectoryOptimizer:
                 else self.spline_config.blend_data,
             )
             point_gen = EquidistantPointGenerator(
-                spline_gen, method=self.config.spline_points_method
+                self.node, spline_gen, method=self.config.spline_points_method
             )
             points, parameters, arc_lengths = point_gen.generate_points(
                 num_points=self.config.num_points
             )
-            print(f"Total Arc Length: {arc_lengths[-1]}")
+            self.node.get_logger().debug(f"Total Arc Length: {arc_lengths[-1]:.3f}m")
 
             if self.evaluating_initial_trajectory:
                 self.evaluating_initial_trajectory = False
@@ -266,10 +222,10 @@ class TrajectoryOptimizer:
                     X,
                     Y,
                     self.path_polygon,
-                    safety_margin=self.config.safety_margin,
-                    check_stride=self.config.check_stride,
+                    safety_margin=self.config.collision_checking.safety_margin,
+                    check_stride=self.config.collision_checking.collision_check_interval,
                 ):
-                    print("Collision detected")
+                    self.node.get_logger().warn("Collision detected in trajectory")
                     self.stats["collisions"] += 1
                     return TrajectoryInfo(
                         waypoints=waypoints,
@@ -281,7 +237,7 @@ class TrajectoryOptimizer:
                         spline_segments=spline_gen.segments,
                         point_params=parameters,
                     )
-                print("No collision detected")
+                self.node.get_logger().debug("No collision detected in trajectory")
 
             # Generate planning points with curvature info
             planning_points = []
@@ -316,11 +272,12 @@ class TrajectoryOptimizer:
             else:
                 velocity_profile = self._profile_generator.generate_velocity_profile(
                     planning_points,
-                    start_velocity=self.spline_config.blend_data.velocity,
+                    startVelocity=self.spline_config.blend_data.velocity,
                     end_velocity=0.0 if self.spline_config.is_last_window else None,
                     start_time=self.spline_config.blend_data.time,
                 )
             total_time = velocity_profile[-1].time if velocity_profile else float("inf")
+            self.node.get_logger().debug(f"Generated trajectory with total time: {total_time:.3f}s")
 
             return TrajectoryInfo(
                 waypoints=waypoints,
@@ -334,7 +291,7 @@ class TrajectoryOptimizer:
             )
 
         except Exception as e:
-            print(f"Error in trajectory evaluation: {e}")
+            self.node.get_logger().error(f"Error in trajectory evaluation: {e}")
             return TrajectoryInfo(
                 waypoints=waypoints,
                 tangent_factors=tangent_factors,
@@ -362,12 +319,13 @@ class TrajectoryOptimizer:
         """
 
         self.reset_rprop_states()
+        self.node.get_logger().info("Starting trajectory optimization")
 
         start_time = time.time()
 
         # Initialize current state from initial trajectory
-        # current_trajectory = initial_trajectory
         best_trajectory = initial_trajectory
+        self.node.get_logger().debug(f"Initial trajectory time: {best_trajectory.total_time:.3f}s")
 
         # Initialize parameters for each inner waypoint
         parameters = []
@@ -391,78 +349,65 @@ class TrajectoryOptimizer:
                     ),
                 ]
             )
+        
+        self.node.get_logger().debug(f"Optimizing {len(parameters)} parameters")
 
         # Main optimization loop with time limit from config
-        time_left = time.time() - start_time
-        while (time.time() - start_time) < self.config.optimization_time_limit:
+        time_limit = self.config.optimization_time_limit
+        self.node.get_logger().info(f"Optimization time limit: {time_limit:.1f}s")
+        
+        while (time.time() - start_time) < time_limit:
             self.stats["iterations"] += 1
             made_improvement = False
 
             # Track time remaining
-            time_remaining = self.config.optimization_time_limit - (time.time() - start_time)
+            time_remaining = time_limit - (time.time() - start_time)
             if time_remaining <= 0:
+                self.node.get_logger().debug("Time limit reached, stopping optimization")
                 break
 
             # Optimize each parameter
             for param in parameters:
                 self.stats["no_of_for_loops"] += 1
                 current_trajectory = best_trajectory
+                
                 # Skip if we're out of time
-                if (time.time() - start_time) >= self.config.optimization_time_limit:
+                if (time.time() - start_time) >= time_limit:
                     break
 
                 if param.type == "TANGENT":
-                    # print("Optimizing tangent")
+                    self.node.get_logger().debug(f"Optimizing tangent at waypoint {param.waypoint_index}")
                     new_trajectory = self.optimize_tangent(param, current_trajectory)
-                    # new_trajectory = best_trajectory
                 elif param.type == "GRADIENT":
+                    self.node.get_logger().debug(f"Optimizing gradient direction at waypoint {param.waypoint_index}")
                     new_trajectory = self.optimize_gradient_direction(
                         param, current_trajectory, self.distance_map, self.X, self.Y
                     )
-                #     # new_trajectory = best_trajectory
-
                 elif param.type == "PERPENDICULAR":
+                    self.node.get_logger().debug(f"Optimizing perpendicular direction at waypoint {param.waypoint_index}")
                     new_trajectory = self.optimize_perpendicular_direction(
                         param, current_trajectory, self.distance_map, self.X, self.Y
                     )
-                    # new_trajectory = best_trajectory
-                # else:  # TANGENT
-                #     new_trajectory = self.optimize_tangent(param, current_trajectory)
-                # print(f"best_trajectory.total_time: {best_trajectory.total_time} & new_trajectory.total_time: {new_trajectory.total_time}")
+
                 if new_trajectory.total_time < best_trajectory.total_time:
+                    improvement = best_trajectory.total_time - new_trajectory.total_time
                     best_trajectory = new_trajectory
                     made_improvement = True
                     self.stats["improvements"] += 1
-                    print(
-                        f"Trajectory improved because of {param.type} and waypoint idx {param.waypoint_index} optimization"
+                    self.node.get_logger().info(
+                        f"Trajectory improved by {param.type} optimization at waypoint {param.waypoint_index}: "
+                        f"time reduced by {improvement:.3f}s to {new_trajectory.total_time:.3f}s"
                     )
-                # else:
-                #     print("not improved")
 
-            # Try waypoint deletion after parameter optimization
-            # if len(current_trajectory.waypoints) > 3:
-            #     new_trajectory = self.try_waypoint_deletion(current_trajectory)
-            #     if new_trajectory.total_time < best_trajectory.total_time:
-            #         best_trajectory = new_trajectory
-            #         current_trajectory = new_trajectory
-            #         self.stats['improvements'] += 1
-
-            #         # Update parameters for new waypoint configuration
-            #         parameters = []
-            #         for i in range(1, len(current_trajectory.waypoints)-1):
-            #             parameters.extend([
-            #                 Parameter(type="GRADIENT", waypoint_index=i,
-            #                          rprop_state=RPROPState()),
-            #                 Parameter(type="PERPENDICULAR", waypoint_index=i,
-            #                          rprop_state=RPROPState()),
-            #                 Parameter(type="TANGENT", waypoint_index=i,
-            #                          rprop_state=RPROPState())
-            #             ])
-
-            # if not made_improvement:
-            #     break
-
+        # Update statistics
         self.stats["optimization_time"] = time.time() - start_time
+        
+        # Log optimization results
+        self.node.get_logger().info(
+            f"Optimization completed in {self.stats['optimization_time']:.3f}s with "
+            f"{self.stats['iterations']} iterations, {self.stats['improvements']} improvements"
+        )
+
         return best_trajectory, self.stats
 
     def optimize_gradient_direction(
@@ -480,25 +425,36 @@ class TrajectoryOptimizer:
         rprop = param.rprop_state
         if rprop.delta == 0.0:  # If not initialized
             rprop.delta = rprop.delta_0
+            self.node.get_logger().debug(f"Initialized gradient optimization delta to {rprop.delta}")
+        
         waypoint_idx = param.waypoint_index
         current_point = trajectory.waypoints[waypoint_idx]
-        # best_trajectory = trajectory
+        
+        self.node.get_logger().debug(f"Optimizing gradient direction for waypoint {waypoint_idx}")
 
         # Get gradient info
         Sx, Sy = self.apply_sobel_operator(dist_map, current_point)
         alpha = self.calculate_gradient_angle(Sx, Sy)
         if np.isnan(alpha):
+            self.node.get_logger().debug("Skipping - gradient angle is undefined")
             return trajectory
 
         # Movement vector in gradient direction
         movement_x = np.cos(alpha)
         movement_y = np.sin(alpha)
+        self.node.get_logger().debug(
+            f"Movement direction: [{movement_x:.4f}, {movement_y:.4f}], angle: {alpha:.4f} rad"
+        )
 
         # Try RPROP step
         new_waypoints = trajectory.waypoints.copy()
         new_point = current_point + rprop.delta * np.array([movement_x, movement_y])
+        self.node.get_logger().debug(
+            f"Trying new point: [{new_point[0]:.4f}, {new_point[1]:.4f}], delta: {rprop.delta:.4f}"
+        )
 
         if not self.path_polygon.contains(Point(new_point)):
+            self.node.get_logger().debug("New point outside path boundary, decreasing delta")
             rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
             return trajectory
 
@@ -510,25 +466,36 @@ class TrajectoryOptimizer:
         # Compute improvement
         improvement = trajectory.total_time - new_trajectory.total_time
         current_sign = np.sign(improvement)
+        self.node.get_logger().debug(f"Improvement: {improvement:.4f}s, sign: {current_sign}")
 
         # Update RPROP state
         if rprop.prev_gradient_sign != 0:  # Not first iteration
             sign_correlation = current_sign * rprop.prev_gradient_sign
+            self.node.get_logger().debug(f"Sign correlation: {sign_correlation}")
 
             if sign_correlation > 0:
                 # Same direction - increase step size
                 rprop.delta = min(rprop.delta * rprop.eta_plus, rprop.delta_max)
+                self.node.get_logger().debug(f"Increasing delta to {rprop.delta:.4f}")
             elif sign_correlation < 0:
                 # Direction changed - decrease step size
                 rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
                 rprop.prev_gradient_sign = current_sign
+                self.node.get_logger().debug(
+                    f"Direction changed, decreasing delta to {rprop.delta:.4f} and returning current trajectory"
+                )
                 return trajectory  # Revert and return current trajectory
 
         # Update previous gradient sign
         rprop.prev_gradient_sign = current_sign
-
+        
         # Return better trajectory if found
-        return new_trajectory if improvement > 0 else trajectory
+        if improvement > 0:
+            self.node.get_logger().debug(f"Improvement found, returning new trajectory")
+            return new_trajectory
+        else:
+            self.node.get_logger().debug(f"No improvement, returning original trajectory")
+            return trajectory
 
     def optimize_perpendicular_direction(
         self,
@@ -545,34 +512,40 @@ class TrajectoryOptimizer:
         rprop = param.rprop_state
         if rprop.delta == 0.0:  # If not initialized
             rprop.delta = rprop.delta_0
+            self.node.get_logger().debug(f"Initialized perpendicular optimization delta to {rprop.delta}")
+        
         waypoint_idx = param.waypoint_index
         current_point = trajectory.waypoints[waypoint_idx]
         next_point = trajectory.waypoints[waypoint_idx + 1]
-        # best_trajectory = trajectory
+        
+        self.node.get_logger().debug(f"Optimizing perpendicular direction for waypoint {waypoint_idx}")
 
         # Get gradient info
         Sx, Sy = self.apply_sobel_operator(dist_map, current_point)
         alpha = self.calculate_gradient_angle(Sx, Sy)
 
         if np.isnan(alpha):
+            self.node.get_logger().debug("Skipping - gradient angle is undefined")
             return trajectory
 
         # Movement vector orthogonal to gradient (α + π/2)
         movement_x = np.cos(alpha + np.pi / 2)
         movement_y = np.sin(alpha + np.pi / 2)
-
-        # Ensure movement aligns with travel direction
-        # travel_dir = next_point - current_point
-        # if np.dot([movement_x, movement_y], travel_dir) < 0:
-        #     movement_x = -movement_x
-        #     movement_y = -movement_y
+        self.node.get_logger().debug(
+            f"Movement direction: [{movement_x:.4f}, {movement_y:.4f}], "
+            f"perpendicular to angle: {alpha:.4f} rad"
+        )
 
         # Try RPROP step
         new_waypoints = trajectory.waypoints.copy()
         new_point = current_point + (rprop.delta) * np.array([movement_x, movement_y])
+        self.node.get_logger().debug(
+            f"Trying new point: [{new_point[0]:.4f}, {new_point[1]:.4f}], delta: {rprop.delta:.4f}"
+        )
 
         # Validate new position
         if not self.path_polygon.contains(Point(new_point)):
+            self.node.get_logger().debug("New point outside path boundary, decreasing delta")
             rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
             return trajectory
 
@@ -584,79 +557,36 @@ class TrajectoryOptimizer:
         # Compute improvement
         improvement = trajectory.total_time - new_trajectory.total_time
         current_sign = np.sign(improvement)
+        self.node.get_logger().debug(f"Improvement: {improvement:.4f}s, sign: {current_sign}")
 
         # Update RPROP state
         if rprop.prev_gradient_sign != 0:  # Not first iteration
             sign_correlation = current_sign * rprop.prev_gradient_sign
+            self.node.get_logger().debug(f"Sign correlation: {sign_correlation}")
 
             if sign_correlation > 0:
                 # Same direction - increase step size
                 rprop.delta = min(rprop.delta * rprop.eta_plus, rprop.delta_max)
+                self.node.get_logger().debug(f"Increasing delta to {rprop.delta:.4f}")
             elif sign_correlation < 0:
                 # Direction changed - decrease step size
                 rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
                 rprop.prev_gradient_sign = current_sign
+                self.node.get_logger().debug(
+                    f"Direction changed, decreasing delta to {rprop.delta:.4f} and returning current trajectory"
+                )
                 return trajectory  # Revert and return current trajectory
 
         # Update previous gradient sign
         rprop.prev_gradient_sign = current_sign
-
+        
         # Return better trajectory if found
-        return new_trajectory if improvement > 0 else trajectory
-
-    # def optimize_tangent(self, param: Parameter,
-    #                     trajectory: TrajectoryInfo) -> TrajectoryInfo:
-    #     """
-    #     Optimize tangent elongation factor.
-    #     Paper section 4.2.1: Third parameter - tangent magnitude
-    #     """
-    #     rprop = param.rprop_state
-    #     if rprop.delta == 0.0:  # If not initialized
-    #         rprop.delta = rprop.delta_0
-    #     waypoint_idx = param.waypoint_index
-    #     # best_trajectory = trajectory
-
-    #     # Try modified elongation factor
-    #     new_tangent_factors = trajectory.tangent_factors.copy()
-    #     elongation = 1.0 + rprop.delta  # Always positive scalar
-    #     new_tangent_factors[waypoint_idx] *= elongation
-    #     print(f"New Tangent Factors: {new_tangent_factors} because of param type: {param.type} and waypoint idx: {param.waypoint_index}")
-
-    #     # Evaluate new trajectory
-    #     new_trajectory = self.evaluate_trajectory(
-    #         trajectory.waypoints,
-    #         new_tangent_factors,
-    #         self.distance_map, self.X, self.Y
-    #     )
-
-    #     print(f"Trajectory stats during Tangent Optimization:\n"
-    #                 f"      Tangent factors: {new_trajectory.tangent_factors},\n"
-    #                 f"      Time range: {new_trajectory.planning_points[0].time} - {new_trajectory.planning_points[-1].time},\n"
-    #                 f"      Planning Points Range: {new_trajectory.planning_points[0].position} - {new_trajectory.planning_points[-1].position},\n"
-    #                 f"      Velocity Range: {new_trajectory.planning_points[0].velocity} - {new_trajectory.planning_points[-1].velocity}")
-
-    #     # Compute improvement
-    #     improvement = trajectory.total_time - new_trajectory.total_time
-    #     print(f"Improvement: {improvement}")
-    #     current_sign = np.sign(improvement)
-
-    #     # Update RPROP state
-    #     if rprop.prev_gradient_sign != 0:  # Not first iteration
-    #         sign_correlation = current_sign * rprop.prev_gradient_sign
-
-    #         if sign_correlation > 0:
-    #             # Same direction - increase step size
-    #             rprop.delta = min(rprop.delta * rprop.eta_plus, rprop.delta_max)
-    #         elif sign_correlation < 0:
-    #             # Direction changed - decrease step size
-    #             rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
-    #             return trajectory  # Revert and return current trajectory
-
-    #     # Update previous gradient sign
-    #     rprop.prev_gradient_sign = current_sign
-
-    #     # Return better trajectory if found
-    #     return new_trajectory if improvement > 0 else trajectory
+        if improvement > 0:
+            self.node.get_logger().debug(f"Improvement found, returning new trajectory")
+            return new_trajectory
+        else:
+            self.node.get_logger().debug(f"No improvement, returning original trajectory")
+            return trajectory
 
     def optimize_tangent(self, param: Parameter, trajectory: TrajectoryInfo) -> TrajectoryInfo:
         """
@@ -664,64 +594,73 @@ class TrajectoryOptimizer:
         Paper section 4.2.1: Third parameter - tangent magnitude
         """
         rprop = param.rprop_state
-        print(f"\nStarting tangent optimization for waypoint {param.waypoint_index}")
-        print(f"Initial RPROP state - delta: {rprop.delta}, prev_sign: {rprop.prev_gradient_sign}")
+        waypoint_idx = param.waypoint_index
+        
+        self.node.get_logger().debug(
+            f"Starting tangent optimization for waypoint {waypoint_idx}, "
+            f"initial delta: {rprop.delta:.4f}, prev_sign: {rprop.prev_gradient_sign}"
+        )
+        
         if rprop.delta == 0.0:  # If not initialized
             rprop.delta = rprop.delta_0
-        waypoint_idx = param.waypoint_index
-        # best_trajectory = trajectory
+            self.node.get_logger().debug(f"Initialized delta to {rprop.delta}")
 
         # Try modified elongation factor
         new_tangent_factors = trajectory.tangent_factors.copy()
         elongation = 1.0 + rprop.delta  # Always positive scalar
         new_tangent_factors[waypoint_idx] *= elongation
-        # print(f"New Tangent Factors: {new_tangent_factors}")
+        self.node.get_logger().debug(f"Applying elongation factor: {elongation:.4f}")
 
         # Evaluate new trajectory
         new_trajectory = self.evaluate_trajectory(
             trajectory.waypoints, new_tangent_factors, self.distance_map, self.X, self.Y
         )
-        print(
-            f"Trajectory stats during Tangent Optimization:\n"
-            f"      Tangent factors: {new_trajectory.tangent_factors},\n"
-            f"      Time range: {new_trajectory.planning_points[0].time} - {new_trajectory.planning_points[-1].time},\n"
-            f"      Planning Points Range: {new_trajectory.planning_points[0].position} - {new_trajectory.planning_points[-1].position},\n"
-            f"      Velocity Range: {new_trajectory.planning_points[0].velocity} - {new_trajectory.planning_points[-1].velocity}"
+        
+        if not new_trajectory.planning_points:
+            self.node.get_logger().debug("No valid planning points in new trajectory")
+            return trajectory
+            
+        self.node.get_logger().debug(
+            f"Trajectory stats - Time: {new_trajectory.total_time:.3f}s, "
+            f"Points: {len(new_trajectory.planning_points)}, "
+            f"Velocity range: {new_trajectory.planning_points[0].velocity:.2f} to "
+            f"{new_trajectory.planning_points[-1].velocity:.2f} m/s"
         )
 
         # Compute improvement
         improvement = trajectory.total_time - new_trajectory.total_time
-        print(f"improvement: {improvement}")
         current_sign = np.sign(improvement)
-
-        print(
-            f"current_sign: {current_sign} & rprop.prev_gradient_sign: {rprop.prev_gradient_sign}"
-        )
+        self.node.get_logger().debug(f"Improvement: {improvement:.4f}s, sign: {current_sign}")
 
         # Update RPROP state
         if rprop.prev_gradient_sign != 0:  # Not first iteration
             sign_correlation = current_sign * rprop.prev_gradient_sign
+            self.node.get_logger().debug(f"Sign correlation: {sign_correlation}")
 
             if sign_correlation > 0:
                 # Same direction - increase step size
                 rprop.delta = min(rprop.delta * rprop.eta_plus, rprop.delta_max)
+                self.node.get_logger().debug(f"Increasing delta to {rprop.delta:.4f}")
             elif sign_correlation < 0:
                 # Direction changed - decrease step size
                 rprop.delta = max(rprop.delta * rprop.eta_minus, rprop.delta_min)
                 rprop.prev_gradient_sign = current_sign  # Update sign before returning
+                self.node.get_logger().debug(
+                    f"Direction changed, decreasing delta to {rprop.delta:.4f} and returning current trajectory"
+                )
                 return trajectory  # Revert and return current trajectory
 
         # Update previous gradient sign
         rprop.prev_gradient_sign = current_sign
-        print(
-            f"current_sign: {current_sign} & Updated rprop.prev_gradient_sign: {rprop.prev_gradient_sign}"
-        )
+        self.node.get_logger().debug(f"Updated prev_gradient_sign to {rprop.prev_gradient_sign}")
+        
         # Return better trajectory if found
-        print(
-            f"total_time: {trajectory.total_time} & new_trajectory.total_time: {new_trajectory.total_time}"
-        )
-        print(f"Final RPROP state - delta: {rprop.delta}, prev_sign: {rprop.prev_gradient_sign}\n")
-        return new_trajectory if improvement > 0 else trajectory
+        if improvement > 0:
+            self.node.get_logger().debug(f"Improvement found, returning new trajectory")
+            return new_trajectory
+        else:
+            self.node.get_logger().debug(f"No improvement, returning original trajectory")
+            return trajectory
 
     def apply_sobel_operator(self, dist_map: np.ndarray, point: np.ndarray) -> Tuple[float, float]:
         """
@@ -734,6 +673,9 @@ class TrajectoryOptimizer:
 
         # Check if we can get 5x5 window
         if not (2 <= i < dist_map.shape[0] - 2 and 2 <= j < dist_map.shape[1] - 2):
+            self.node.get_logger().debug(
+                f"Point [{point[0]:.4f}, {point[1]:.4f}] too close to map boundary for Sobel operator"
+            )
             return np.nan, np.nan
 
         # Get 5x5 window
@@ -742,12 +684,14 @@ class TrajectoryOptimizer:
 
         # If center point is NaN, gradient undefined
         if np.isnan(window[2, 2]):
+            self.node.get_logger().debug(f"Center point is NaN, gradient undefined")
             return np.nan, np.nan
 
         # Apply kernels only to valid regions
         Sx = np.sum(window[valid_mask] * self.sobel_x[valid_mask])
         Sy = np.sum(window[valid_mask] * self.sobel_y[valid_mask])
-
+        
+        self.node.get_logger().debug(f"Sobel operator result: Sx={Sx:.4f}, Sy={Sy:.4f}")
         return Sx, Sy
 
     def calculate_gradient_angle(self, Sx: float, Sy: float) -> float:
@@ -757,15 +701,19 @@ class TrajectoryOptimizer:
         α = arctan(Sy/Sx) + π otherwise
         """
         if np.isnan(Sx) or np.isnan(Sy):
+            self.node.get_logger().debug("Cannot calculate gradient angle - Sx or Sy is NaN")
             return np.nan
 
         if abs(Sx) < 1e-10:
-            return np.pi / 2 if Sy >= 0 else -np.pi / 2
+            angle = np.pi / 2 if Sy >= 0 else -np.pi / 2
+            self.node.get_logger().debug(f"Sx near zero, using vertical angle: {angle:.4f} rad")
+            return angle
 
         alpha = np.arctan(Sy / Sx)
         if Sy < 0:
             alpha += np.pi
-
+        
+        self.node.get_logger().debug(f"Calculated gradient angle: {alpha:.4f} rad")
         return alpha
 
     def try_waypoint_deletion(self, trajectory: TrajectoryInfo) -> TrajectoryInfo:
@@ -774,6 +722,7 @@ class TrajectoryOptimizer:
         1. Distance ratio: How much path length changes if point removed
         2. Turn angle: How sharp the turn is at the point
         """
+        self.node.get_logger().info(f"Attempting waypoint deletion from trajectory with {len(trajectory.waypoints)} waypoints")
 
         def calculate_distance(p1: np.ndarray, p2: np.ndarray) -> float:
             """Calculate Euclidean distance between two points."""
@@ -800,6 +749,7 @@ class TrajectoryOptimizer:
         best_trajectory = trajectory
 
         if len(trajectory.waypoints) <= 3:  # Need at least start, one inner, end
+            self.node.get_logger().debug("Not enough waypoints for deletion, need at least 3")
             return trajectory
 
         # Calculate metrics for each inner waypoint
@@ -814,13 +764,19 @@ class TrajectoryOptimizer:
                 curr_point, next_point
             )
             direct_path_length = calculate_distance(prev_point, next_point)
+            turn_angle = calculate_turn_angle(prev_point, curr_point, next_point)
 
             deletion_candidates.append(
                 {
                     "index": i,
                     "distance_ratio": curr_path_length / direct_path_length,
-                    "turn_angle": calculate_turn_angle(prev_point, curr_point, next_point),
+                    "turn_angle": turn_angle,
                 }
+            )
+            
+            self.node.get_logger().debug(
+                f"Waypoint {i} metrics: distance_ratio={curr_path_length / direct_path_length:.4f}, "
+                f"turn_angle={turn_angle:.4f} rad"
             )
 
         # Sort candidates by combination of metrics
@@ -835,10 +791,16 @@ class TrajectoryOptimizer:
                 )  # Smaller difference from π
             )
         )
+        
+        self.node.get_logger().debug(f"Sorted deletion candidates: {[c['index'] for c in deletion_candidates]}")
 
         # Try removing points in priority order
         for candidate in deletion_candidates:
             idx = candidate["index"]
+            self.node.get_logger().info(
+                f"Trying to remove waypoint {idx} with distance_ratio={candidate['distance_ratio']:.4f}, "
+                f"turn_angle={candidate['turn_angle']:.4f} rad"
+            )
 
             # Create new waypoints and tangent factors without this point
             new_waypoints = trajectory.waypoints[:idx] + trajectory.waypoints[idx + 1 :]
@@ -851,9 +813,23 @@ class TrajectoryOptimizer:
                 new_waypoints, new_tangent_factors, self.distance_map, self.X, self.Y
             )
 
-            # Keep if better
+            # Check if improvement found
             if new_trajectory.total_time < best_trajectory.total_time:
+                improvement = best_trajectory.total_time - new_trajectory.total_time
+                self.node.get_logger().info(
+                    f"Removing waypoint {idx} improves trajectory time by {improvement:.3f}s"
+                )
                 best_trajectory = new_trajectory
                 break  # Conservative: only remove one point at a time
+            else:
+                self.node.get_logger().debug(f"Removing waypoint {idx} does not improve trajectory")
+
+        if best_trajectory is not trajectory:
+            self.node.get_logger().info(
+                f"Waypoint deletion successful, reduced from {len(trajectory.waypoints)} to "
+                f"{len(best_trajectory.waypoints)} waypoints"
+            )
+        else:
+            self.node.get_logger().info("No waypoints removed - original trajectory is optimal")
 
         return best_trajectory

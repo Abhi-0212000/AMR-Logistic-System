@@ -8,13 +8,17 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
 from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import Quaternion
+import math
 from amr_interfaces.action import NavigateToGoal
-from amr_interfaces.msg import RobotPose, Trajectory
+from amr_interfaces.msg import RobotPose, Trajectory, TrajectoryPoint
 
 from .amr_trajectory_planner_params import trajectory_planner
 from .lanelet_map_manager import LaneletMapManager
 from amr_utils_python.coordinate_transforms_py import GPSPoint
 from .config_types import *
+import numpy as np
+from .core_modules.window_manager import WindowManager
 
 
 class TrajectoryPlannerActionServer(Node):
@@ -68,7 +72,10 @@ class TrajectoryPlannerActionServer(Node):
         self.get_logger().info("Publisher for trajectory topic initialized")
 
     def robot_pose_callback(self, msg):
-        pass
+        """Store the latest robot pose"""
+        # Save the latest robot pose for planning
+        self.current_pose = msg
+        self.get_logger().debug(f"Received robot pose: ({msg.position.x:.2f}, {msg.position.y:.2f})")
 
     def init_trajectory_planner_configs(self):
         """Initialize the trajectory planner configurations from parameters"""
@@ -249,188 +256,12 @@ class TrajectoryPlannerActionServer(Node):
         return CancelResponse.ACCEPT
 
     def execute_callback(self, goal_handle):
-        """Execute the goal"""
-        self.get_logger().info("Executing goal...")
+        """Execute the goal using window-based trajectory planning"""
+        self.get_logger().info("Executing navigation goal...")
         self._goal_executing = True
 
         # Extract goal details
         goal = goal_handle.request
-        feedback_msg = NavigateToGoal.Feedback()
-        result = NavigateToGoal.Result()
-
-        lanelet_count = len(goal.lanelet_ids)
-        self.get_logger().info(f"Planning trajectory through {lanelet_count} lanelets")
-        self.get_logger().info(f"Goal GPS: [{goal.goal_gps[0]}, {goal.goal_gps[1]}]")
-
-        # Initialize distance and time (for simulation)
-        total_distance = (
-            goal.total_distance if goal.total_distance > 0 else 100.0
-        )  # Default to 100m if not specified
-        total_time_estimate = (
-            goal.estimated_time if goal.estimated_time > 0 else 60.0
-        )  # Default to 60s if not specified
-
-        try:
-            self.get_logger().info(
-                f"Initializing Lanelet Map Manager with {self.params.map_data.map_path}"
-            )
-            map_origin_gps = GPSPoint(
-                self.params.map_data.gps_origin.latitude,
-                self.params.map_data.gps_origin.longitude,
-                self.params.map_data.gps_origin.altitude,
-            )
-            map_manager = LaneletMapManager(self, self.params.map_data.map_path, map_origin_gps)
-
-            # Load the map
-            if not map_manager.load_map():
-                self.get_logger().error("Failed to load lanelet map")
-                raise RuntimeError("Failed to load lanelet map")
-
-            # Build routing graph
-            if not map_manager.build_routing_graph():
-                self.get_logger().error("Failed to build routing graph")
-                raise RuntimeError("Failed to build routing graph")
-
-            self.get_logger().info("Successfully loaded lanelet map and built routing graph")
-
-            # Process each lanelet from the goal
-            self.get_logger().info("Processing lanelets from goal:")
-            centerline_points = []
-            for i, lanelet_id in enumerate(goal.lanelet_ids):
-                # Get the correct inverted flag from the client message
-                inverted = goal.is_inverted[i]
-
-                self.get_logger().info(f"Loading lanelet {lanelet_id}, inverted: {inverted}")
-
-                # Get the lanelet
-                lanelet = map_manager.get_lanelet_by_id(lanelet_id, inverted)
-                centerline = [[point.x, point.y] for point in lanelet.centerline]
-                centerline_points.extend(centerline)
-
-                if lanelet is not None:
-                    # Print some lanelet information
-                    self.get_logger().info(f"  - Lanelet ID: {lanelet.id}")
-
-                    # Get lanelet attributes
-                    attributes = []
-                    for key, value in lanelet.attributes.items():
-                        attributes.append(f"{key}: {value}")
-                    self.get_logger().info(f"  - Attributes: {', '.join(attributes)}")
-
-                    # Print information about the lanelet points
-                    self.get_logger().info(
-                        f"  - Centerline point count: {len(lanelet.centerline)}"
-                    )
-                    self.get_logger().info(f"  - Left bound point count: {len(lanelet.leftBound)}")
-                    self.get_logger().info(
-                        f"  - Right bound point count: {len(lanelet.rightBound)}"
-                    )
-
-                    # Print first and last centerline points if available
-                    if len(lanelet.centerline) > 0:
-                        first_point = lanelet.centerline[0]
-                        last_point = lanelet.centerline[-1]
-                        self.get_logger().info(
-                            f"  - First centerline point: \
-                                ({first_point.x:.2f}, {first_point.y:.2f})"
-                        )
-                        self.get_logger().info(
-                            f"  - Last centerline point: ({last_point.x:.2f}, {last_point.y:.2f})"
-                        )
-
-                    # Check if lanelet is navigable by AMR
-                    is_navigable = (
-                        "amr_navigable" in lanelet.attributes
-                        and lanelet.attributes["amr_navigable"] == "yes"
-                    )
-                    self.get_logger().info(f"  - AMR Navigable: {is_navigable}")
-
-                    # Check if lanelet is one-way
-                    is_one_way = (
-                        "one_way" in lanelet.attributes and lanelet.attributes["one_way"] == "yes"
-                    )
-                    self.get_logger().info(f"  - One Way: {is_one_way}")
-
-                    # Check if lanelet is bidirectional
-                    is_bidir = (
-                        "bidirectional" in lanelet.attributes
-                        and lanelet.attributes["bidirectional"] == "yes"
-                    )
-                    self.get_logger().info(f"  - Bidirectional: {is_bidir}")
-                else:
-                    self.get_logger().error(f"  - Failed to get lanelet with ID: {lanelet_id}")
-
-            # Continue with the existing simulation code
-            self.get_logger().info("Continuing with trajectory execution simulation...")
-
-            # Simulate planning and execution process
-            total_steps = 20  # More steps for a smoother simulation
-            for i in range(1, total_steps + 1):
-                # Check if goal was canceled
-                if goal_handle.is_cancel_requested:
-                    goal_handle.canceled()
-                    self.get_logger().info("Goal canceled")
-                    self._goal_executing = False
-
-                    # Set partial results for canceled goal
-                    result.status = GoalStatus(status=GoalStatus.STATUS_CANCELED)
-                    result.message = "Navigation canceled by user"
-                    result.total_distance = total_distance * (i / total_steps)
-                    result.total_time = total_time_estimate * (i / total_steps)
-                    return result
-
-                # Simulate some planning/execution work
-                time.sleep(0.5)  # Simulate work
-
-                # Calculate remaining progress (simulate as a percentage of completion)
-                progress_percent = i / total_steps
-                distance_remaining = total_distance * (1.0 - progress_percent)
-                time_remaining = total_time_estimate * (1.0 - progress_percent)
-
-                # Update and publish feedback
-                feedback_msg.distance_remaining = distance_remaining
-                feedback_msg.estimated_time_remaining = time_remaining
-                goal_handle.publish_feedback(feedback_msg)
-
-                self.get_logger().info(
-                    f"Navigation progress: {progress_percent*100:.1f}%, "
-                    + f"Distance remaining: {distance_remaining:.1f}m, "
-                    + f"Time remaining: {time_remaining:.1f}s"
-                )
-
-            # Example of setting a successful result
-            result.status = GoalStatus(status=GoalStatus.STATUS_SUCCEEDED)
-            result.message = "Navigation completed successfully"
-            result.total_distance = total_distance
-            result.total_time = total_time_estimate
-
-            goal_handle.succeed()
-            self.get_logger().info("Goal succeeded")
-
-        except Exception as e:
-            # Handle any exceptions during execution
-            self.get_logger().error(f"Goal execution failed: {str(e)}")
-            goal_handle.abort()
-            result.status = GoalStatus(status=GoalStatus.STATUS_ABORTED)
-            result.message = f"Failed to plan trajectory: {str(e)}"
-            result.total_distance = 0.0
-            result.total_time = 0.0
-
-        finally:
-            self._goal_executing = False
-
-        return result
-
-    def execute_callback1(self, goal_handle):
-        """Execute the goal"""
-        self.get_logger().info("Executing goal...")
-        self._goal_executing = True
-
-        # Extract goal details
-        goal = goal_handle.request
-        self.lanelet_ids = goal.lanelet_ids
-        self.is_inverted = goal.is_inverted
-
         feedback_msg = NavigateToGoal.Feedback()
         result = NavigateToGoal.Result()
 
@@ -442,103 +273,153 @@ class TrajectoryPlannerActionServer(Node):
                 self.params.map_data.gps_origin.longitude,
                 self.params.map_data.gps_origin.altitude,
             )
-            self.map_manager = LaneletMapManager(
-                self, self.params.map_data.map_path, map_origin_gps
-            )
+            map_manager = LaneletMapManager(self, self.params.map_data.map_path, map_origin_gps)
 
             # Load map and build routing graph
-            if not self.map_manager.load_map():
+            if not map_manager.load_map():
                 raise RuntimeError("Failed to load lanelet map")
-            self.get_logger().info("Successfully loaded map and built routing graph")
+            
+            if not map_manager.build_routing_graph():
+                raise RuntimeError("Failed to build routing graph")
 
-            # Initialize window manager and trajectory generation components
-            window_manager = self._initialize_window_manager(self.map_manager, goal)
+            self.get_logger().info("Successfully loaded lanelet map and routing graph")
+            
+            # Process lanelet data for centerline processing
+            centerline_points = []
+            for i, lanelet_id in enumerate(goal.lanelet_ids):
+                # Get the correct inverted flag from the client message
+                inverted = goal.is_inverted[i]
+                
+                self.get_logger().info(f"Loading lanelet {lanelet_id}, inverted: {inverted}")
+                
+                # Get the lanelet
+                lanelet = map_manager.get_lanelet_by_id(lanelet_id, inverted)
+                if lanelet is not None:
+                    centerline = [[point.x, point.y] for point in lanelet.centerline]
+                    centerline_points.extend(centerline)
+                    self.get_logger().info(
+                        f"Added {len(lanelet.centerline)} points from lanelet {lanelet_id}"
+                    )
+                else:
+                    self.get_logger().error(f"Failed to get lanelet with ID: {lanelet_id}")
+                    raise RuntimeError(f"Lanelet {lanelet_id} not found in map")
 
-            # Planning state variables
+            # Initialize trajectory planning components
+            window_manager = WindowManager(self)
+            
+            # Wait for a valid robot position
+            timeout_count = 0
+            while not hasattr(self, 'current_pose') or self.current_pose is None:
+                time.sleep(0.1)
+                timeout_count += 1
+                if timeout_count > 50:  # 5 second timeout
+                    raise RuntimeError("Timeout waiting for robot pose data")
+            
+            # Get robot position as numpy array
+            robot_position = np.array([self.current_pose.position.x, self.current_pose.position.y])
+            self.get_logger().info(f"Starting trajectory planning from position: {robot_position}")
+
+            # Main planning loop - continue until goal reached
             window_index = 0
             planning_complete = False
-            robot_position = self._get_initial_position(goal)
-
-            # Main planning loop
+            
             while not planning_complete:
-                # Check for cancellation
+                # Check if goal was canceled
                 if goal_handle.is_cancel_requested:
                     goal_handle.canceled()
                     self.get_logger().info("Goal canceled")
+                    self._goal_executing = False
                     result.status = GoalStatus(status=GoalStatus.STATUS_CANCELED)
-                    result.message = "Navigation canceled by user"
+                    result.message = "Navigation canceled"
                     return result
 
                 # Process current window
                 try:
                     # Log starting window processing
                     self.get_logger().info(f"Processing window {window_index}")
-                    window_start_time = time.time()
-
+                    start_time = self.get_clock().now()
+                    
                     # Generate trajectory for current window
-                    current_trajectory, initial_trajectory = window_manager.process_window(
-                        robot_position, window_index
-                    )
+                    current_trajectory, initial_trajectory = window_manager.process_window(robot_position)
 
-                    # Calculate planning duration for feedback
-                    planning_duration = time.time() - window_start_time
-
-                    # Verify trajectory is valid
-                    if not current_trajectory or not current_trajectory.planning_points:
-                        raise RuntimeError(
-                            f"Failed to generate trajectory for window {window_index}"
+                    # Calculate processing time
+                    elapsed = (self.get_clock().now() - start_time).nanoseconds / 1e9
+                    
+                    # Check if trajectory generation failed
+                    if current_trajectory is None:
+                        if window_manager.is_goal_reached():
+                            # We're done - this is expected
+                            planning_complete = True
+                            self.get_logger().info("Goal reached - planning complete")
+                        else:
+                            # Unexpected failure
+                            raise RuntimeError(f"Failed to generate trajectory for window {window_index}")
+                    else:
+                        # Publish trajectory
+                        trajectory_msg = self._trajectory_info_to_msg(current_trajectory)
+                        
+                        self.trajectory_publisher.publish(trajectory_msg)
+                        
+                        # Update next planning time
+                        next_planning_time = window_manager.calculate_next_planning_time()
+                        
+                        # Log success
+                        self.get_logger().info(
+                            f"Window {window_index} processed in {elapsed:.3f}s: "
+                            f"{len(current_trajectory.planning_points)} points, "
+                            f"duration: {current_trajectory.total_time:.2f}s"
                         )
 
-                    # Publish trajectory
-                    trajectory_msg = self._trajectory_info_to_msg(current_trajectory)
-                    self.trajectory_publisher.publish(trajectory_msg)
+                        # Check if goal reached
+                        if window_manager.current_window_is_last:
+                            planning_complete = True
+                            self.get_logger().info("Final window processed - goal will be reached")
 
-                    # Log success
-                    self.get_logger().info(
-                        f"Window {window_index} processed successfully:"
-                        f"\n  Points: {len(current_trajectory.planning_points)}"
-                        f"\n  Duration: {current_trajectory.planning_points[-1].time:.2f}s"
-                        f"\n  Planning time: {planning_duration:.3f}s"
-                    )
+                        # Update and send feedback
+                        distance_remaining = window_manager.get_remaining_distance()
+                        time_remaining = window_manager.get_remaining_time()
+                        feedback_msg.distance_remaining = distance_remaining
+                        feedback_msg.estimated_time_remaining = time_remaining
+                        goal_handle.publish_feedback(feedback_msg)
+                        
+                        self.get_logger().info(
+                            f"Navigation progress: Distance remaining: {distance_remaining:.1f}m, "
+                            f"Time remaining: {time_remaining:.1f}s"
+                        )
 
-                    # Save trajectory data if needed
-                    self._save_trajectory_data(
-                        current_trajectory, initial_trajectory, window_index
-                    )
-
-                    # Update robot position
-                    robot_position = self._get_updated_position(current_trajectory)
-
-                    # Check if planning is complete
-                    if window_manager.is_final_window(window_index):
-                        planning_complete = True
-                        self.get_logger().info("Final window completed, goal achieved")
-
-                    # Update and send feedback
-                    distance_remaining = window_manager.get_remaining_distance(window_index)
-                    time_remaining = window_manager.get_remaining_time(window_index)
-                    feedback_msg.distance_remaining = distance_remaining
-                    feedback_msg.estimated_time_remaining = time_remaining
-                    goal_handle.publish_feedback(feedback_msg)
-
-                    # Increment window index
-                    window_index += 1
-
-                    # Wait appropriate time before planning next window
-                    self._wait_for_next_window(current_trajectory, window_manager)
-
-                except Exception as e:
-                    self.get_logger().error(f"Error processing window {window_index}: {str(e)}")
-                    if self._is_fatal_error(e):
-                        raise  # Re-throw fatal errors
-                    else:
-                        # Try to continue with next window
-                        self.get_logger().warn(f"Attempting to continue with next window")
+                        # Get updated robot position for next iteration
+                        if hasattr(self, 'current_pose') and self.current_pose is not None:
+                            robot_position = np.array([
+                                self.current_pose.position.x, 
+                                self.current_pose.position.y
+                            ])
+                        
+                        # Wait appropriate time before planning next window
+                        if next_planning_time is not None and next_planning_time > 0.0:
+                            self.get_logger().info(
+                                f"Waiting {next_planning_time:.2f}s before planning next window"
+                            )
+                            # Sleep in small intervals to allow cancel checks
+                            sleep_interval = 0.1
+                            for _ in range(int(next_planning_time / sleep_interval)):
+                                if goal_handle.is_cancel_requested:
+                                    break
+                                time.sleep(sleep_interval)
+                        
+                        # Increment window index
                         window_index += 1
-
-                        # If too many consecutive errors, abort
-                        if window_index > 3:  # Consider tracking consecutive error count
-                            raise RuntimeError("Too many planning failures, aborting")
+                            
+                except Exception as e:
+                    import traceback
+                    self.get_logger().error(
+                        f"Error processing window {window_index}: {str(e)}\n{traceback.format_exc()}"
+                    )
+                    # Try to continue with next window if possible
+                    window_index += 1
+                    
+                    # If too many consecutive errors, abort
+                    if window_index > 3:  # Consider tracking consecutive error count
+                        raise RuntimeError(f"Too many planning failures, aborting: {str(e)}")
 
             # Success case
             goal_handle.succeed()
@@ -546,23 +427,59 @@ class TrajectoryPlannerActionServer(Node):
             result.message = "Navigation completed successfully"
             result.total_distance = window_manager.get_total_distance()
             result.total_time = sum(
-                [t.planning_points[-1].time for t in window_manager.trajectories]
-            )
+                [t.total_time for t in window_manager.trajectories]
+            ) if window_manager.trajectories else 0.0
 
         except Exception as e:
+            import traceback
             # Handle all exceptions during execution
-            self.get_logger().error(f"Goal execution failed: {str(e)}")
+            self.get_logger().error(
+                f"Goal execution failed: {str(e)}\n{traceback.format_exc()}"
+            )
             goal_handle.abort()
-            result.status = GoalStatus(status=GoalStatus.STATUS_ABORTED)
+            result.status = GoalStatus(status=GoalStatus.STATUS_ABORTED) 
             result.message = f"Failed to plan trajectory: {str(e)}"
             result.total_distance = 0.0
             result.total_time = 0.0
 
         finally:
             self._goal_executing = False
-            self._cleanup_resources()
 
         return result
+
+    def _trajectory_info_to_msg(self, trajectory: TrajectoryInfo) -> Trajectory:
+        """Convert TrajectoryInfo to ROS message."""
+        msg = Trajectory()
+        
+        for point in trajectory.planning_points:
+            traj_point = TrajectoryPoint()
+            
+            # Set timestamp
+            traj_point.timestamp = float(point.time)
+            
+            # Set pose
+            traj_point.pose.header.frame_id = "map"
+            traj_point.pose.header.stamp = self.get_clock().now().to_msg()
+            
+            traj_point.pose.pose.position.x = float(point.position[0])
+            traj_point.pose.pose.position.y = float(point.position[1])
+            traj_point.pose.pose.position.z = 0.0
+            
+            # Convert heading to quaternion
+            quat = Quaternion()
+            quat.x = 0.0
+            quat.y = 0.0
+            quat.z = math.sin(point.heading * 0.5)
+            quat.w = math.cos(point.heading * 0.5)
+            traj_point.pose.pose.orientation = quat
+            
+            # Set velocity and yaw rate
+            traj_point.velocity = float(point.velocity)
+            # traj_point.yaw_rate = float(point.yaw_rate)
+            
+            msg.points.append(traj_point)
+            
+        return msg
 
 
 def main(args=None):
@@ -575,7 +492,6 @@ def main(args=None):
     executor.add_node(trajectory_planner_node)
 
     try:
-        trajectory_planner_node.get_logger().info("Beginning trajectory planner execution loop")
         executor.spin()
     except KeyboardInterrupt:
         trajectory_planner_node.get_logger().info("Keyboard interrupt, shutting down")
